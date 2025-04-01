@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import axios from 'axios';
 import './uploadTimetable.css';
 
 function UploadTimetable() {
@@ -9,6 +10,35 @@ function UploadTimetable() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [checkingExisting, setCheckingExisting] = useState(false);
+  
+  // Check for existing timetable when semester changes
+  useEffect(() => {
+    const checkExistingTimetable = async () => {
+      if (!semester) return;
+      
+      setCheckingExisting(true);
+      try {
+        const response = await axios.get('http://localhost:5000/api/timetable/check', {
+          params: { semester }
+        });
+        
+        if (response.data.exists) {
+          setError(`A timetable already exists for Semester ${semester}. Please delete the existing one first.`);
+        } else {
+          setError('');
+        }
+      } catch (err) {
+        console.error("Error checking existing timetables:", err);
+      } finally {
+        setCheckingExisting(false);
+      }
+    };
+
+    if (semester) {
+      checkExistingTimetable();
+    }
+  }, [semester]);
   
   const handleFileChange = (e) => {
     const selectedFile = e.target.files[0];
@@ -43,22 +73,23 @@ function UploadTimetable() {
     formData.append('semester', semester);
     
     try {
-      const response = await fetch('http://localhost:5000/api/timetable/upload-timetable', {
-        method: 'POST',
-        body: formData,
+      const response = await axios.post('http://localhost:5000/api/timetable/upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
       });
       
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.message || 'Failed to upload timetable');
-      }
+      console.log('Response:', response.data);
       
       setSuccess(`Timetable for semester ${semester} uploaded successfully`);
       setFile(null);
       setSemester('');
       document.getElementById('fileInput').value = '';
     } catch (error) {
-      setError(error.message);
+      console.error('Upload error:', error);
+      if (error.response?.status === 409) {
+        setError('A timetable already exists for this semester. Please delete the existing one first.');
+      } else {
+        setError(error.response?.data?.message || 'Failed to upload timetable');
+      }
     } finally {
       setLoading(false);
     }
@@ -68,9 +99,14 @@ function UploadTimetable() {
     <div className="upload-page">
       <div className="page-header">
         <h1>Upload Class Timetable</h1>
-        <button className="btn btn-secondary" onClick={() => navigate('/dashboard')}>
-          Back to Dashboard
-        </button>
+        <div className="header-actions">
+          <button className="btn btn-secondary" onClick={() => navigate('/manage-timetables')}>
+            Manage Timetables
+          </button>
+          <button className="btn btn-secondary" onClick={() => navigate('/dashboard')}>
+            Back to Dashboard
+          </button>
+        </div>
       </div>
       
       <div className="upload-form-container">
@@ -113,12 +149,18 @@ function UploadTimetable() {
           </div>
           
           <div className="form-actions">
-            <button type="submit" className="btn btn-primary" disabled={loading}>
+            <button 
+              type="submit" 
+              className="btn btn-primary" 
+              disabled={loading || checkingExisting || error.includes('already exists')}
+            >
               {loading ? (
                 <span>
                   <span className="spinner"></span>
                   Uploading...
                 </span>
+              ) : checkingExisting ? (
+                <span>Checking...</span>
               ) : (
                 'Upload Timetable'
               )}

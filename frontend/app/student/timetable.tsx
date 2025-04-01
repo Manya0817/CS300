@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   View, 
   Text, 
@@ -7,121 +7,104 @@ import {
   ScrollView, 
   ActivityIndicator, 
   Dimensions,
-  RefreshControl,
-  Image
+  RefreshControl
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { LinearGradient } from 'expo-linear-gradient';
-import { ChevronDown, FileText, Download, Calendar, Clock, ArrowLeft } from 'lucide-react-native';
+import { Calendar, Clock, ArrowLeft, FileText, AlertTriangle, Info } from 'lucide-react-native';
 import * as Linking from 'expo-linking';
 import { useRouter } from 'expo-router';
 import { Ionicons } from "@expo/vector-icons";
+import { collection, getDocs, query, orderBy } from 'firebase/firestore';
+import { db } from '../../firebase';
 
 const { width } = Dimensions.get('window');
 
-// Mock data for the timetables
-const mockTimetables = [
-  {
-    id: '1',
-    semester: 1,
-    fileName: 'Semester 1 Timetable.pdf',
-    fileUrl: 'https://example.com/timetable1.pdf',
-    lastUpdated: '2024-04-15T10:00:00Z'
-  },
-  {
-    id: '2',
-    semester: 2,
-    fileName: 'Semester 2 Timetable.pdf',
-    fileUrl: 'https://example.com/timetable2.pdf',
-    lastUpdated: '2024-04-10T10:00:00Z'
-  },
-  {
-    id: '3',
-    semester: 3,
-    fileName: 'Semester 3 Timetable.pdf',
-    fileUrl: 'https://example.com/timetable3.pdf',
-    lastUpdated: '2024-04-05T10:00:00Z'
-  },
-  {
-    id: '4',
-    semester: 4,
-    fileName: 'Semester 4 Timetable.pdf',
-    fileUrl: 'https://example.com/timetable4.pdf',
-    lastUpdated: '2024-04-01T10:00:00Z'
-  },
-  {
-    id: '5',
-    semester: 5,
-    fileName: 'Semester 5 Timetable.pdf',
-    fileUrl: 'https://example.com/timetable5.pdf',
-    lastUpdated: '2024-03-25T10:00:00Z'
-  },
-  {
-    id: '6',
-    semester: 6,
-    fileName: 'Semester 6 Timetable.pdf',
-    fileUrl: 'https://example.com/timetable6.pdf',
-    lastUpdated: '2024-03-20T10:00:00Z'
-  },
-  {
-    id: '7',
-    semester: 7,
-    fileName: 'Semester 7 Timetable.pdf',
-    fileUrl: 'https://example.com/timetable7.pdf',
-    lastUpdated: '2024-03-15T10:00:00Z'
-  },
-  {
-    id: '8',
-    semester: 8,
-    fileName: 'Semester 8 Timetable.pdf',
-    fileUrl: 'https://example.com/timetable8.pdf',
-    lastUpdated: '2024-03-10T10:00:00Z'
-  }
-];
+// Define the type for timetable data
+interface Timetable {
+  id: string;
+  semester: string;
+  fileUrl: string;
+  uploadedAt: string;
+  originalFilename?: string;
+}
 
 export default function TimetablePage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
-  const [timetables, setTimetables] = useState<{ id: string; semester: number; fileName: string; fileUrl: string; lastUpdated: string; }[]>([]);
-  const [selectedSemester, setSelectedSemester] = useState<number | null>(null);
+  const [timetables, setTimetables] = useState<Timetable[]>([]);
+  const [selectedSemester, setSelectedSemester] = useState<string | null>(null);
   const [showSemesterDropdown, setShowSemesterDropdown] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  // Fetch timetables (simulated)
-  useEffect(() => {
-    const fetchTimetables = async () => {
-      try {
-        // For now, use mock data
-        setTimeout(() => {
-          setTimetables(mockTimetables);
-          setLoading(false);
-        }, 1000);
-      } catch (error) {
-        console.error('Error fetching timetables:', error);
-        setLoading(false);
+  // Fetch timetables from Firebase
+  const fetchTimetables = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      // Query Firebase for all timetables
+      const timetableRef = collection(db, 'semester-timetables');
+      
+      const timetableSnapshot = await getDocs(
+        query(timetableRef, orderBy('uploadedAt', 'desc'))
+      );
+      
+      if (timetableSnapshot.empty) {
+        setTimetables([]);
+        setError('No timetables available at this time.');
+      } else {
+        const timetableList: Timetable[] = [];
+        
+        timetableSnapshot.forEach((doc) => {
+          const data = doc.data();
+          timetableList.push({
+            id: doc.id,
+            semester: data.semester || 'All',
+            fileUrl: data.fileUrl,
+            uploadedAt: data.uploadedAt,
+            originalFilename: data.originalFilename || 'Timetable.pdf'
+          });
+        });
+        
+        setTimetables(timetableList);
       }
-    };
+    } catch (err) {
+      console.error('Error fetching timetables:', err);
+      setError('Failed to load timetables. Please try again later.');
+      setTimetables([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  // Fetch timetables on component mount
+  useEffect(() => {
     fetchTimetables();
   }, []);
 
-  const onRefresh = React.useCallback(() => {
+  // Handle refresh
+  const onRefresh = useCallback(() => {
     setRefreshing(true);
-    // In a real app, refresh data here
-    setTimeout(() => {
+    fetchTimetables().then(() => {
       setRefreshing(false);
-    }, 1000);
+    });
   }, []);
 
-  const handleSemesterSelect = (semester: number | null) => {
+  const handleSemesterSelect = (semester: string | null) => {
     setSelectedSemester(semester);
     setShowSemesterDropdown(false);
   };
 
-  const handleDownload = (fileUrl: string) => {
-    // In a real app, this would download the file or open it in a viewer
-    Linking.openURL(fileUrl);
+  const handleOpenFile = (fileUrl: string) => {
+    console.log('Opening file:', fileUrl);
+    // Use Linking API to open the PDF
+    Linking.openURL(fileUrl).catch(err => {
+      console.error('Error opening URL:', err);
+      alert('Could not open the file. Please try again later.');
+    });
   };
 
   const handleGoBack = () => {
@@ -131,183 +114,234 @@ export default function TimetablePage() {
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
-    });
+    const options: Intl.DateTimeFormatOptions = { 
+      year: 'numeric', 
+      month: 'short', 
+      day: 'numeric', 
+      hour: '2-digit', 
+      minute: '2-digit'
+    };
+    return date.toLocaleDateString('en-US', options);
   };
 
+  // Filter timetables based on selected semester
   const filteredTimetables = selectedSemester 
     ? timetables.filter(tt => tt.semester === selectedSemester)
     : timetables;
 
+  // Get all available semesters from data
+  const availableSemesters = [...new Set(timetables.map(t => t.semester))].sort();
+
+  // Render timetables
+  const renderTimetables = () => {
+    if (loading) {
+      return (
+        <View style={styles.loaderContainer}>
+          <ActivityIndicator size="large" color="#5BC0BE" />
+          <Text style={styles.loaderText}>Loading timetables...</Text>
+        </View>
+      );
+    }
+    
+    if (error || timetables.length === 0) {
+      return (
+        <View style={styles.noDataContainer}>
+          <AlertTriangle size={40} color="#5BC0BE" />
+          <Text style={styles.noDataText}>{error || 'No timetables available'}</Text>
+          <TouchableOpacity 
+            style={styles.refreshButton}
+            onPress={onRefresh}
+          >
+            <Text style={styles.refreshButtonText}>Refresh</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
+    if (filteredTimetables.length === 0) {
+      return (
+        <View style={styles.emptyState}>
+          <Calendar size={60} color="#3A506B" />
+          <Text style={styles.emptyStateTitle}>No Timetables Found</Text>
+          <Text style={styles.emptyStateText}>
+            {selectedSemester 
+              ? `No timetables available for Semester ${selectedSemester}` 
+              : 'No timetables available yet. Check back later.'}
+          </Text>
+          <TouchableOpacity 
+            style={styles.refreshButton}
+            onPress={() => setSelectedSemester(null)}
+          >
+            <Text style={styles.refreshButtonText}>View All Timetables</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
+    return (
+      <>
+        {filteredTimetables.map((timetable) => (
+          <View key={timetable.id} style={styles.timetableCard}>
+            <View style={styles.timetableHeader}>
+              <View style={styles.fileCardHeader}>
+                <FileText size={20} color="#5BC0BE" style={styles.fileIcon} />
+                <Text style={styles.fileCardTitle}>
+                  {timetable.semester === 'All' 
+                    ? 'General Timetable' 
+                    : `Semester ${timetable.semester} Timetable`}
+                </Text>
+              </View>
+            </View>
+            
+            <View style={styles.divider} />
+            
+            <View style={styles.timetableInfo}>
+              <View style={styles.filePreview}>
+                <Text style={styles.previewText}>PDF</Text>
+              </View>
+              <View style={styles.timetableDetails}>
+                <Text style={styles.timetableFileName}>
+                  {timetable.originalFilename || 'Timetable.pdf'}
+                </Text>
+                <View style={styles.lastUpdatedContainer}>
+                  <Clock size={14} color="#9BA1D0" style={styles.smallInfoIcon} />
+                  <Text style={styles.lastUpdatedText}>
+                    Updated: {formatDate(timetable.uploadedAt)}
+                  </Text>
+                </View>
+              </View>
+            </View>
+
+            <TouchableOpacity 
+              style={styles.viewButton}
+              onPress={() => handleOpenFile(timetable.fileUrl)}
+            >
+              <Text style={styles.viewButtonText}>View Timetable</Text>
+            </TouchableOpacity>
+          </View>
+        ))}
+      </>
+    );
+  };
+
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       <StatusBar style="light" />
       
-      {/* Gradient Background */}
+      {/* Background Gradient */}
       <LinearGradient
         colors={['#0B132B', '#1C2541']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
         style={styles.background}
       />
       
       {/* Header with Back Button */}
-      <SafeAreaView edges={['top']} style={styles.safeArea}>
-        <View style={styles.header}>
-          <TouchableOpacity 
-            style={styles.backButton}
-            onPress={handleGoBack}
-            accessible={true}
-            accessibilityLabel="Go back to dashboard"
-            accessibilityRole="button"
-          >
-            <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Class Timetables</Text>
-          <View style={styles.headerIconPlaceholder} />
-        </View>
-        
-        {/* Banner Image */}
-        <View style={styles.bannerContainer}>
-          <View style={styles.bannerContent}>
-            <View style={styles.bannerIconContainer}>
-              <Ionicons name="calendar-outline" size={36} color="#FFFFFF" />
-            </View>
-            <View style={styles.bannerTextContainer}>
-              <Text style={styles.bannerTitle}>Semester Timetables</Text>
-              <Text style={styles.bannerSubtitle}>View & download your class schedules</Text>
-            </View>
-          </View>
-        </View>
-      </SafeAreaView>
+      <View style={styles.header}>
+        <TouchableOpacity 
+          style={styles.backButton}
+          onPress={handleGoBack}
+          accessible={true}
+          accessibilityLabel="Go back to dashboard"
+          accessibilityRole="button"
+        >
+          <ArrowLeft size={22} color="#FFFFFF" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Class Timetables</Text>
+        <View style={styles.placeholderView} />
+      </View>
       
-      {/* Content Area */}
-      <View style={styles.contentContainer}>
-        {/* Semester Filter */}
-        <View style={styles.filterContainer}>
-          <Text style={styles.filterLabel}>Filter by Semester:</Text>
-          <TouchableOpacity 
-            style={styles.dropdownButton}
-            onPress={() => setShowSemesterDropdown(!showSemesterDropdown)}
-          >
-            <Text style={styles.dropdownButtonText}>
-              {selectedSemester ? `Semester ${selectedSemester}` : 'All Semesters'}
-            </Text>
-            <Ionicons name={showSemesterDropdown ? "chevron-up" : "chevron-down"} size={18} color="#5BC0BE" />
-          </TouchableOpacity>
+      <ScrollView 
+        style={styles.contentContainer}
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={['#5BC0BE']}
+            tintColor="#5BC0BE"
+          />
+        }
+      >
+        {/* Status Card */}
+        <View style={styles.statusCard}>
+          <View style={styles.statusIcon}>
+            <Calendar size={20} color="#5BC0BE" />
+          </View>
+          <Text style={styles.statusText}>Semester Timetables</Text>
         </View>
         
-        {/* Semester Dropdown */}
-        {showSemesterDropdown && (
-          <View style={styles.dropdownMenu}>
+        {/* Semester Filter */}
+        {timetables.length > 0 && (
+          <View style={styles.filterContainer}>
+            <Text style={styles.filterLabel}>Filter by Semester:</Text>
             <TouchableOpacity 
-              style={styles.dropdownItem}
-              onPress={() => handleSemesterSelect(null)}
+              style={styles.dropdownButton}
+              onPress={() => setShowSemesterDropdown(!showSemesterDropdown)}
             >
-              <Text style={[
-                styles.dropdownItemText, 
-                selectedSemester === null && styles.dropdownItemTextActive
-              ]}>
-                All Semesters
+              <Text style={styles.dropdownButtonText}>
+                {selectedSemester ? `Semester ${selectedSemester}` : 'All Semesters'}
               </Text>
-              {selectedSemester === null && (
-                <Ionicons name="checkmark" size={18} color="#5BC0BE" />
-              )}
+              <Ionicons name={showSemesterDropdown ? "chevron-up" : "chevron-down"} size={18} color="#5BC0BE" />
             </TouchableOpacity>
-            {[1, 2, 3, 4, 5, 6, 7, 8].map(sem => (
-              <TouchableOpacity 
-                key={sem}
-                style={styles.dropdownItem}
-                onPress={() => handleSemesterSelect(sem)}
-              >
-                <Text style={[
-                  styles.dropdownItemText, 
-                  selectedSemester === sem && styles.dropdownItemTextActive
-                ]}>
-                  Semester {sem}
-                </Text>
-                {selectedSemester === sem && (
-                  <Ionicons name="checkmark" size={18} color="#5BC0BE" />
-                )}
-              </TouchableOpacity>
-            ))}
+            
+            {/* Semester Dropdown */}
+            {showSemesterDropdown && (
+              <View style={styles.dropdownMenu}>
+                <TouchableOpacity 
+                  style={styles.dropdownItem}
+                  onPress={() => handleSemesterSelect(null)}
+                >
+                  <Text style={[
+                    styles.dropdownItemText, 
+                    selectedSemester === null && styles.dropdownItemTextActive
+                  ]}>
+                    All Semesters
+                  </Text>
+                  {selectedSemester === null && (
+                    <Ionicons name="checkmark" size={18} color="#5BC0BE" />
+                  )}
+                </TouchableOpacity>
+                
+                {availableSemesters.map((semester) => (
+                  <TouchableOpacity 
+                    key={semester}
+                    style={styles.dropdownItem}
+                    onPress={() => handleSemesterSelect(semester)}
+                  >
+                    <Text style={[
+                      styles.dropdownItemText, 
+                      selectedSemester === semester && styles.dropdownItemTextActive
+                    ]}>
+                      {semester === 'All' ? 'General' : `Semester ${semester}`}
+                    </Text>
+                    {selectedSemester === semester && (
+                      <Ionicons name="checkmark" size={18} color="#5BC0BE" />
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
           </View>
         )}
         
         {/* Timetable List */}
-        {loading ? (
-          <View style={styles.loaderContainer}>
-            <ActivityIndicator size="large" color="#5BC0BE" />
-            <Text style={styles.loaderText}>Loading timetables...</Text>
+        {renderTimetables()}
+        
+        {/* Help Card */}
+        <View style={styles.helpCard}>
+          <View style={styles.helpCardContent}>
+            <View style={styles.helpIconContainer}>
+              <Info size={24} color="#FFFFFF" />
+            </View>
+            <View style={styles.helpTextContainer}>
+              <Text style={styles.helpTitle}>Need Help?</Text>
+              <Text style={styles.helpText}>If you're having trouble viewing the timetable, please contact your department office.</Text>
+            </View>
           </View>
-        ) : (
-          <ScrollView 
-            style={styles.timetableList}
-            contentContainerStyle={styles.timetableListContent}
-            refreshControl={
-              <RefreshControl 
-                refreshing={refreshing} 
-                onRefresh={onRefresh} 
-                colors={['#5BC0BE']} 
-                tintColor="#5BC0BE"
-              />
-            }
-          >
-            {filteredTimetables.length > 0 ? (
-              filteredTimetables.map(timetable => (
-                <View key={timetable.id} style={styles.timetableCard}>
-                  <View style={styles.timetableHeader}>
-                    <View style={styles.semesterBadge}>
-                      <Text style={styles.semesterBadgeText}>Semester {timetable.semester}</Text>
-                    </View>
-                    <TouchableOpacity 
-                      style={styles.downloadButton}
-                      onPress={() => handleDownload(timetable.fileUrl)}
-                    >
-                      <Ionicons name="download-outline" size={18} color="#5BC0BE" />
-                    </TouchableOpacity>
-                  </View>
-                  
-                  <View style={styles.timetableInfo}>
-                    <View style={styles.fileIconContainer}>
-                      <Ionicons name="document-text-outline" size={26} color="#5BC0BE" />
-                    </View>
-                    <View style={styles.timetableDetails}>
-                      <Text style={styles.timetableFileName}>{timetable.fileName}</Text>
-                      <View style={styles.lastUpdatedContainer}>
-                        <Ionicons name="time-outline" size={14} color="#6B7280" style={styles.infoIcon} />
-                        <Text style={styles.lastUpdatedText}>
-                          Updated: {formatDate(timetable.lastUpdated)}
-                        </Text>
-                      </View>
-                    </View>
-                  </View>
-                  
-                  <TouchableOpacity 
-                    style={styles.viewButton}
-                    onPress={() => handleDownload(timetable.fileUrl)}
-                  >
-                    <Text style={styles.viewButtonText}>View Timetable</Text>
-                    <Ionicons name="eye-outline" size={18} color="#FFFFFF" />
-                  </TouchableOpacity>
-                </View>
-              ))
-            ) : (
-              <View style={styles.emptyState}>
-                <Ionicons name="calendar" size={60} color="#3A506B" />
-                <Text style={styles.emptyStateTitle}>No Timetables Found</Text>
-                <Text style={styles.emptyStateText}>
-                  {selectedSemester 
-                    ? `No timetables available for Semester ${selectedSemester}` 
-                    : 'No timetables available yet. Check back later.'}
-                </Text>
-              </View>
-            )}
-          </ScrollView>
-        )}
-      </View>
-    </View>
+        </View>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
@@ -323,76 +357,62 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
   },
-  safeArea: {
-    backgroundColor: 'transparent',
-  },
   header: {
+    paddingHorizontal: 20,
+    paddingVertical: 16,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-  },
-  headerIconPlaceholder: {
-    width: 40,
+    marginBottom: 8,
   },
   backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     backgroundColor: 'rgba(91, 192, 190, 0.2)',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  placeholderView: {
+    width: 38,
   },
   headerTitle: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: '700',
     color: '#FFFFFF',
-  },
-  bannerContainer: {
-    marginHorizontal: 20,
-    marginVertical: 16,
-    borderRadius: 18,
-    overflow: 'hidden',
-    backgroundColor: 'rgba(58, 80, 107, 0.6)',
-  },
-  bannerContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 20,
-  },
-  bannerIconContainer: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: 'rgba(91, 192, 190, 0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 16,
-  },
-  bannerTextContainer: {
-    flex: 1,
-  },
-  bannerTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    marginBottom: 4,
-  },
-  bannerSubtitle: {
-    fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.7)',
+    textAlign: 'center',
   },
   contentContainer: {
     flex: 1,
-    backgroundColor: '#0B132B',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingTop: 20,
+  },
+  scrollContent: {
+    padding: 20,
+    paddingBottom: 40,
+  },
+  statusCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(91, 192, 190, 0.1)',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 20,
+  },
+  statusIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(91, 192, 190, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  statusText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#A7D5E4',
   },
   filterContainer: {
-    paddingHorizontal: 20,
-    marginBottom: 12,
+    marginBottom: 20,
   },
   filterLabel: {
     fontSize: 15,
@@ -408,7 +428,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
     borderWidth: 1,
     borderColor: 'rgba(91, 192, 190, 0.3)',
   },
@@ -420,7 +439,7 @@ const styles = StyleSheet.create({
   dropdownMenu: {
     backgroundColor: 'rgba(58, 80, 107, 0.9)',
     borderRadius: 12,
-    marginHorizontal: 20,
+    marginTop: 8,
     paddingVertical: 8,
     marginBottom: 16,
     zIndex: 10,
@@ -442,34 +461,11 @@ const styles = StyleSheet.create({
     color: '#5BC0BE',
     fontWeight: '600',
   },
-  loaderContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingTop: 60,
-  },
-  loaderText: {
-    marginTop: 16,
-    fontSize: 16,
-    color: 'rgba(255, 255, 255, 0.6)',
-  },
-  timetableList: {
-    flex: 1,
-  },
-  timetableListContent: {
-    paddingHorizontal: 20,
-    paddingBottom: 20,
-  },
   timetableCard: {
     backgroundColor: 'rgba(28, 37, 65, 0.8)',
     borderRadius: 16,
-    padding: 16,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 5,
+    padding: 20,
+    marginBottom: 20,
     borderWidth: 1,
     borderColor: 'rgba(91, 192, 190, 0.2)',
   },
@@ -479,86 +475,137 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 16,
   },
-  semesterBadge: {
-    backgroundColor: 'rgba(91, 192, 190, 0.15)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(91, 192, 190, 0.3)',
-  },
-  semesterBadgeText: {
-    color: '#5BC0BE',
-    fontWeight: '600',
-    fontSize: 13,
-  },
-  downloadButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(91, 192, 190, 0.15)',
+  fileCardHeader: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(91, 192, 190, 0.3)',
+  },
+  fileIcon: {
+    marginRight: 8,
+  },
+  fileCardTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#D8EDEF',
+  },
+  divider: {
+    height: 1,
+    backgroundColor: 'rgba(91, 192, 190, 0.15)',
+    marginBottom: 16,
   },
   timetableInfo: {
     flexDirection: 'row',
-    marginBottom: 16,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(91, 192, 190, 0.15)',
+    marginBottom: 20,
   },
-  fileIconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    backgroundColor: 'rgba(91, 192, 190, 0.15)',
+  filePreview: {
+    width: 60,
+    height: 80,
+    backgroundColor: 'rgba(91, 192, 190, 0.1)',
+    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 16,
     borderWidth: 1,
-    borderColor: 'rgba(91, 192, 190, 0.3)',
+    borderColor: 'rgba(91, 192, 190, 0.2)',
+    marginRight: 16,
+  },
+  previewText: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#5BC0BE',
   },
   timetableDetails: {
     flex: 1,
     justifyContent: 'center',
   },
   timetableFileName: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '600',
-    color: '#FFFFFF',
-    marginBottom: 4,
+    color: '#F7FAFC',
+    marginBottom: 8,
   },
   lastUpdatedContainer: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-  infoIcon: {
+  smallInfoIcon: {
     marginRight: 6,
   },
   lastUpdatedText: {
     fontSize: 13,
-    color: 'rgba(255, 255, 255, 0.6)',
+    color: '#9BA1D0',
   },
   viewButton: {
-    backgroundColor: '#5BC0BE',
+    backgroundColor: 'rgba(91, 192, 190, 0.15)',
     borderRadius: 12,
-    paddingVertical: 12,
+    paddingVertical: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    flexDirection: 'row',
+    borderWidth: 1,
+    borderColor: 'rgba(91, 192, 190, 0.3)',
   },
   viewButtonText: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '600',
-    color: '#FFFFFF',
-    marginRight: 8,
+    color: '#B7E4E3',
+  },
+  loaderContainer: {
+    backgroundColor: 'rgba(28, 37, 65, 0.6)',
+    borderRadius: 16,
+    padding: 30,
+    marginBottom: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(91, 192, 190, 0.2)',
+    minHeight: 200,
+  },
+  loaderText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#B7E4E3',
+    marginTop: 16,
+  },
+  noDataContainer: {
+    backgroundColor: 'rgba(28, 37, 65, 0.6)',
+    borderRadius: 16,
+    padding: 30,
+    marginBottom: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(91, 192, 190, 0.2)',
+    minHeight: 200,
+  },
+  noDataText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#B7E4E3',
+    marginTop: 16,
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  refreshButton: {
+    backgroundColor: 'rgba(91, 192, 190, 0.2)',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(91, 192, 190, 0.3)',
+  },
+  refreshButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#B7E4E3',
   },
   emptyState: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 60,
+    paddingVertical: 40,
+    backgroundColor: 'rgba(28, 37, 65, 0.6)',
+    borderRadius: 16,
+    padding: 30,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(91, 192, 190, 0.2)',
   },
   emptyStateTitle: {
     fontSize: 18,
@@ -571,6 +618,42 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: 'rgba(255, 255, 255, 0.6)',
     textAlign: 'center',
+    marginBottom: 20,
     maxWidth: '80%',
+  },
+  helpCard: {
+    backgroundColor: 'rgba(91, 192, 190, 0.25)',
+    borderRadius: 16,
+    padding: 20,
+    borderLeftWidth: 4,
+    borderLeftColor: '#5BC0BE',
+    marginTop: 10,
+  },
+  helpCardContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  helpIconContainer: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: 'rgba(91, 192, 190, 0.4)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
+  },
+  helpTextContainer: {
+    flex: 1,
+  },
+  helpTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    marginBottom: 4,
+  },
+  helpText: {
+    fontSize: 14,
+    color: '#D8EDEF',
+    lineHeight: 20,
   },
 });

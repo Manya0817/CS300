@@ -55,6 +55,7 @@ export default function StudentLayout() {
         <Stack.Screen
           name="profile"
           options={{
+            headerShown: false,
             headerTitle: "My Profile",
             headerStyle: { backgroundColor: "#4C1D95" },
             headerTintColor: "#fff",
@@ -64,9 +65,10 @@ export default function StudentLayout() {
         <Stack.Screen
           name="timetable"
           options={{
+            
             headerTitle: "Class Timetable",
             headerStyle: { backgroundColor: "#22C55E" },
-            headerShown: true,
+            headerShown: false,
             headerTintColor: "#fff",
             headerTitleStyle: {
               fontWeight: "700",
@@ -77,7 +79,7 @@ export default function StudentLayout() {
           name="exams"
           options={{
             headerTitle: "Exam Schedule",
-            headerShown: true,
+            headerShown: false,
             headerStyle: { backgroundColor: "#F59E0B" },
             headerTintColor: "#fff",
             headerTitleStyle: {
@@ -85,6 +87,14 @@ export default function StudentLayout() {
             }
           }}
         />
+        
+<Stack.Screen
+  name="notifications"
+  options={{
+    headerShown: false,
+    animation: 'slide_from_right',
+  }}
+/>  
       </Stack>
     </>
   );

@@ -88,7 +88,7 @@ export default function StudentHeadDashboard() {
         <View style={styles.cardContainer}>
           <TouchableOpacity 
             style={styles.card} 
-            onPress={() => router.push("/student-head/timetable")}
+            onPress={() => router.push("./timetable")}
           >
             <View style={styles.cardIconContainer}>
               <Ionicons name="calendar" size={24} color="white" />
@@ -102,7 +102,7 @@ export default function StudentHeadDashboard() {
 
           <TouchableOpacity 
             style={[styles.card, styles.cardAlt]}
-            onPress={() => router.push("/student-head/exams")}
+            onPress={() => router.push("./exams")}
           >
             <View style={[styles.cardIconContainer, styles.cardIconContainerAlt]}>
               <Ionicons name="document-text" size={24} color="white" />

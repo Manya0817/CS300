@@ -96,8 +96,6 @@ const registerFacultyHead = async (req, res) => {
       email,
       phone: phone || null,
       role: 'faculty-head',
-      fcmToken: null, // Will be set when user enables notifications
-      notificationEnabled: false, // Default to false
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       createdBy: 'admin'
     });
@@ -167,8 +165,7 @@ const registerStudentHead = async (req, res) => {
       email,
       phone: phone || null,
       role: 'student-head',
-      fcmToken: null, // Will be set when user enables notifications
-      notificationEnabled: false, // Default to false
+     
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       createdBy: 'admin'
     });

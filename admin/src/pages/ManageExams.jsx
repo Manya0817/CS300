@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import './ManageExams.css'; // Make sure to create this CSS file
+import './ManageExams.css';
 
 function ManageExams() {
   const navigate = useNavigate();
@@ -29,41 +29,13 @@ function ManageExams() {
         return;
       }
       
-      // For development purposes, simulate API response
-      // Remove this and uncomment the actual API call when your backend is ready
-      setTimeout(() => {
-        const mockData = [
-          {
-            _id: '1',
-            examType: 'MidSemester',
-            originalFilename: 'midsem_schedule.pdf',
-            fileUrl: '#',
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString()
-          },
-          {
-            _id: '2',
-            examType: 'EndSemester',
-            originalFilename: 'endsem_schedule.pdf',
-            fileUrl: '#',
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString()
-          }
-        ];
-        setExamSchedules(mockData);
-        setLoading(false);
-      }, 1000);
-      
-      // Uncomment this when your backend is ready
-      /*
-      const response = await axios.get('/api/admin/files/exam', {
+      const response = await axios.get('http://localhost:5000/api/exams/all', {
         headers: {
           'Authorization': `Bearer ${token}`
         }
       });
       
-      setExamSchedules(response.data.data || []);  // Ensure it's always an array
-      */
+      setExamSchedules(response.data.data || []);
     } catch (error) {
       console.error('Fetch error:', error);
       
@@ -77,7 +49,7 @@ function ManageExams() {
     }
   };
   
-  const handleDelete = async (examType) => {
+  const handleDelete = async (id, examType) => {
     try {
       // Get token from local storage
       const token = localStorage.getItem('adminToken');
@@ -87,31 +59,14 @@ function ManageExams() {
         return;
       }
       
-      // For development purposes
-      // Remove this and uncomment the actual API call when your backend is ready
-      setTimeout(() => {
-        // Remove the deleted item from state
-        setExamSchedules(examSchedules.filter(schedule => schedule.examType !== examType));
-        
-        setSuccess(`${getReadableExamType(examType)} schedule deleted successfully`);
-        setConfirmDelete(null);
-        
-        // Clear success message after 3 seconds
-        setTimeout(() => {
-          setSuccess('');
-        }, 3000);
-      }, 500);
-      
-      // Uncomment this when your backend is ready
-      /*
-      await axios.delete(`/api/admin/files/exam/${examType}`, {
+      await axios.delete(`http://localhost:5000/api/exams/${id}`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
       });
       
       // Remove the deleted item from state
-      setExamSchedules(examSchedules.filter(schedule => schedule.examType !== examType));
+      setExamSchedules(examSchedules.filter(schedule => schedule._id !== id));
       
       setSuccess(`${getReadableExamType(examType)} schedule deleted successfully`);
       setConfirmDelete(null);
@@ -120,7 +75,6 @@ function ManageExams() {
       setTimeout(() => {
         setSuccess('');
       }, 3000);
-      */
     } catch (error) {
       console.error('Delete error:', error);
       
@@ -149,12 +103,20 @@ function ManageExams() {
     <div className="manage-page">
       <div className="page-header">
         <h1>Manage Exam Schedules</h1>
-        <button 
-          className="btn btn-secondary" 
-          onClick={() => navigate('/dashboard')}
-        >
-          Back to Dashboard
-        </button>
+        <div className="header-actions">
+          <button 
+            className="btn btn-primary"
+            onClick={() => navigate('/upload-exam')}
+          >
+            Upload New Exam Schedule
+          </button>
+          <button 
+            className="btn btn-secondary" 
+            onClick={() => navigate('/dashboard')}
+          >
+            Back to Dashboard
+          </button>
+        </div>
       </div>
       
       {error && <div className="alert alert-danger">{error}</div>}
@@ -162,7 +124,7 @@ function ManageExams() {
       
       {loading ? (
         <div className="loading">Loading exam schedules...</div>
-      ) : examSchedules && examSchedules.length === 0 ? (
+      ) : examSchedules.length === 0 ? (
         <div className="no-data">
           <p>No exam schedules found. Upload an exam schedule first.</p>
           <button 
@@ -178,15 +140,17 @@ function ManageExams() {
             <thead>
               <tr>
                 <th>Exam Type</th>
+                <th>Batch Year</th>
                 <th>File Name</th>
                 <th>Uploaded On</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {examSchedules && examSchedules.map((schedule) => (
+              {examSchedules.map((schedule) => (
                 <tr key={schedule._id}>
                   <td>{getReadableExamType(schedule.examType)}</td>
+                  <td>{schedule.batchYear || 'All Batches'}</td>
                   <td>
                     <a 
                       href={schedule.fileUrl} 
@@ -197,15 +161,15 @@ function ManageExams() {
                     </a>
                   </td>
                   <td>
-                    {new Date(schedule.updatedAt || schedule.createdAt).toLocaleDateString()}
+                    {new Date(schedule.uploadedAt).toLocaleDateString()}
                   </td>
                   <td>
-                    {confirmDelete === schedule.examType ? (
+                    {confirmDelete === schedule._id ? (
                       <div className="confirm-delete">
                         <span>Are you sure?</span>
                         <button 
                           className="btn btn-danger btn-sm"
-                          onClick={() => handleDelete(schedule.examType)}
+                          onClick={() => handleDelete(schedule._id, schedule.examType)}
                         >
                           Yes
                         </button>
@@ -219,7 +183,7 @@ function ManageExams() {
                     ) : (
                       <button 
                         className="btn btn-danger btn-sm"
-                        onClick={() => setConfirmDelete(schedule.examType)}
+                        onClick={() => setConfirmDelete(schedule._id)}
                       >
                         Delete
                       </button>

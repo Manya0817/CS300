@@ -66,6 +66,7 @@ export default function StudentHeadLayout() {
         <Stack.Screen 
           name="timetable" 
           options={{ 
+            headerShown: false,
             headerTitle: "Class Timetable",
             headerStyle: { backgroundColor: "#0369A1" },
             headerTintColor: "#fff",
@@ -78,6 +79,7 @@ export default function StudentHeadLayout() {
         <Stack.Screen 
           name="exams" 
           options={{ 
+            headerShown: false,
             headerTitle: "Exam Schedule",
             headerStyle: { backgroundColor: "#B91C1C" },
             headerTintColor: "#fff",
@@ -90,6 +92,7 @@ export default function StudentHeadLayout() {
         <Stack.Screen 
           name="events" 
           options={{ 
+            headerShown: false,
             headerTitle: "Manage Events",
             headerStyle: { backgroundColor: "#4D7C0F" },
             headerTintColor: "#fff",

@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import './ManageTimetables.css'; // We'll create this file
+import './ManageTimetables.css';
 
 function ManageTimetables() {
   const navigate = useNavigate();
-  const [timetables, setTimetables] = useState([]); // Initialize as empty array, not undefined
+  const [timetables, setTimetables] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -29,41 +29,13 @@ function ManageTimetables() {
         return;
       }
       
-      // For development purposes, simulate API response
-      // Remove this and uncomment the actual API call when your backend is ready
-      setTimeout(() => {
-        const mockData = [
-          {
-            _id: '1',
-            semester: '1',
-            originalFilename: 'semester1_timetable.pdf',
-            fileUrl: '#',
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString()
-          },
-          {
-            _id: '2',
-            semester: '2',
-            originalFilename: 'semester2_timetable.pdf',
-            fileUrl: '#',
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString()
-          }
-        ];
-        setTimetables(mockData);
-        setLoading(false);
-      }, 1000);
-      
-      // Uncomment this when your backend is ready
-      /*
-      const response = await axios.get('/api/admin/files/timetable', {
+      const response = await axios.get('http://localhost:5000/api/timetable/all', {
         headers: {
           'Authorization': `Bearer ${token}`
         }
       });
       
-      setTimetables(response.data.data || []);  // Ensure it's always an array
-      */
+      setTimetables(response.data.data || []);
     } catch (error) {
       console.error('Fetch error:', error);
       
@@ -87,24 +59,7 @@ function ManageTimetables() {
         return;
       }
       
-      // For development purposes
-      // Remove this and uncomment the actual API call when your backend is ready
-      setTimeout(() => {
-        // Remove the deleted item from state
-        setTimetables(timetables.filter(timetable => timetable._id !== id));
-        
-        setSuccess(`Timetable for semester ${semester} deleted successfully`);
-        setConfirmDelete(null);
-        
-        // Clear success message after 3 seconds
-        setTimeout(() => {
-          setSuccess('');
-        }, 3000);
-      }, 500);
-      
-      // Uncomment this when your backend is ready
-      /*
-      await axios.delete(`/api/admin/files/timetable/${id}`, {
+      await axios.delete(`http://localhost:5000/api/timetable/${id}`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -120,8 +75,6 @@ function ManageTimetables() {
       setTimeout(() => {
         setSuccess('');
       }, 3000);
-      */
-      
     } catch (error) {
       console.error('Delete error:', error);
       
@@ -136,12 +89,20 @@ function ManageTimetables() {
     <div className="manage-page">
       <div className="page-header">
         <h1>Manage Class Timetables</h1>
-        <button 
-          className="btn btn-secondary" 
-          onClick={() => navigate('/dashboard')}
-        >
-          Back to Dashboard
-        </button>
+        <div className="header-actions">
+          <button 
+            className="btn btn-primary" 
+            onClick={() => navigate('/upload-timetable')}
+          >
+            Upload New Timetable
+          </button>
+          <button 
+            className="btn btn-secondary" 
+            onClick={() => navigate('/dashboard')}
+          >
+            Back to Dashboard
+          </button>
+        </div>
       </div>
       
       {error && <div className="alert alert-danger">{error}</div>}
@@ -149,7 +110,7 @@ function ManageTimetables() {
       
       {loading ? (
         <div className="loading">Loading timetables...</div>
-      ) : timetables && timetables.length === 0 ? (
+      ) : timetables.length === 0 ? (
         <div className="no-data">
           <p>No timetables found. Upload a timetable first.</p>
           <button 
@@ -171,7 +132,7 @@ function ManageTimetables() {
               </tr>
             </thead>
             <tbody>
-              {timetables && timetables.map((timetable) => (
+              {timetables.map((timetable) => (
                 <tr key={timetable._id}>
                   <td>Semester {timetable.semester}</td>
                   <td>
@@ -184,7 +145,7 @@ function ManageTimetables() {
                     </a>
                   </td>
                   <td>
-                    {new Date(timetable.updatedAt || timetable.createdAt).toLocaleDateString()}
+                    {new Date(timetable.uploadedAt).toLocaleDateString()}
                   </td>
                   <td>
                     {confirmDelete === timetable._id ? (
