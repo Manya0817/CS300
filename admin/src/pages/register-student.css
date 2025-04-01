@@ -1,0 +1,341 @@
+/* Main container */
+.register-page {
+    padding: 30px;
+    max-width: 900px;
+    margin: 0 auto;
+  }
+  
+  /* Page header */
+  .page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 32px;
+  }
+  
+  .page-header h1 {
+    font-size: 24px;
+    font-weight: 600;
+    margin: 0;
+    color: #333;
+  }
+  
+  .back-button {
+    padding: 10px 16px;
+    background-color: #6c757d;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    transition: background-color 0.2s ease;
+    display: flex;
+    align-items: center;
+  }
+  
+  .back-button:hover {
+    background-color: #5a6268;
+  }
+  
+  /* Register content */
+  .register-content {
+    animation: fadeIn 0.4s ease;
+  }
+  
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  
+  .register-card {
+    background-color: white;
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+    overflow: hidden;
+  }
+  
+  /* Card header */
+  .card-header {
+    padding: 24px 32px;
+    background-color: #f8f9fa;
+    border-bottom: 1px solid #e9ecef;
+  }
+  
+  .card-header h2 {
+    margin: 0 0 8px;
+    font-size: 20px;
+    color: #333;
+  }
+  
+  .card-header p {
+    margin: 0;
+    color: #6c757d;
+    font-size: 14px;
+  }
+  
+  /* Form styling */
+  form {
+    padding: 32px;
+  }
+  
+  .form-group {
+    margin-bottom: 24px;
+  }
+  
+  .form-label {
+    display: block;
+    margin-bottom: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    color: #495057;
+  }
+  
+  .form-control {
+    width: 100%;
+    padding: 12px 16px;
+    border: 1px solid #ced4da;
+    border-radius: 6px;
+    font-size: 15px;
+    color: #495057;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  }
+  
+  .form-control:focus {
+    border-color: #7C3AED;
+    box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.15);
+    outline: none;
+  }
+  
+  .form-control::placeholder {
+    color: #adb5bd;
+  }
+  
+  .form-control:disabled {
+    background-color: #e9ecef;
+    cursor: not-allowed;
+  }
+  
+  .form-text {
+    display: block;
+    margin-top: 6px;
+    font-size: 12px;
+    color: #6c757d;
+  }
+  
+  /* Form actions */
+  .form-actions {
+    margin-top: 32px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+  }
+  
+  /* Buttons */
+  .btn {
+    padding: 12px 20px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: none;
+    text-align: center;
+  }
+  
+  .btn-primary {
+    background-color: #7C3AED;
+    color: white;
+  }
+  
+  .btn-primary:hover {
+    background-color: #6D28D9;
+  }
+  
+  .btn-primary:active {
+    background-color: #5B21B6;
+  }
+  
+  .btn-secondary {
+    background-color: #f8f9fa;
+    color: #495057;
+    border: 1px solid #ced4da;
+  }
+  
+  .btn-secondary:hover {
+    background-color: #e9ecef;
+  }
+  
+  .btn:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+  }
+  
+  /* Message boxes */
+  .message {
+    padding: 16px;
+    border-radius: 6px;
+    margin-bottom: 20px;
+    font-size: 14px;
+    display: flex;
+    align-items: flex-start;
+    margin: 16px 32px 0;
+  }
+  
+  .message.success {
+    background-color: #d1fae5;
+    color: #065f46;
+    border-left: 4px solid #10b981;
+  }
+  
+  .message.error {
+    background-color: #fee2e2;
+    color: #991b1b;
+    border-left: 4px solid #ef4444;
+  }
+  
+  .message::before {
+    font-size: 18px;
+    margin-right: 12px;
+  }
+  
+  .message.success::before {
+    content: '✓';
+    color: #10b981;
+  }
+  
+  .message.error::before {
+    content: '✕';
+    color: #ef4444;
+  }
+  
+  /* Loading state for button */
+  button[type="submit"]:disabled {
+    position: relative;
+  }
+  
+  button[type="submit"]:disabled::before {
+    content: "";
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+    border-top-color: white;
+    left: calc(50% - 30px);
+    top: calc(50% - 8px);
+    animation: spin 1s linear infinite;
+    display: inline-block;
+  }
+  
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+  
+  /* Two column layout for larger screens */
+  @media (min-width: 768px) {
+    form {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      grid-gap: 24px;
+    }
+  
+    .form-group {
+      margin-bottom: 0;
+    }
+  
+    .form-actions {
+      grid-column: span 2;
+      margin-top: 32px;
+    }
+  }
+  
+  /* Responsive adjustments */
+  @media (max-width: 767px) {
+    .register-page {
+      padding: 20px;
+    }
+  
+    .page-header {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 16px;
+    }
+  
+    .card-header {
+      padding: 20px 24px;
+    }
+  
+    form {
+      padding: 24px;
+    }
+  
+    .form-actions {
+      flex-direction: column-reverse;
+    }
+  
+    .form-actions .btn {
+      width: 100%;
+    }
+  }
+  
+  /* Focus visible for accessibility */
+  :focus-visible {
+    outline: 2px solid #7C3AED;
+    outline-offset: 2px;
+  }
+  
+  /* Optional: Input validation styles */
+  .form-control.is-invalid {
+    border-color: #dc3545;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='none' stroke='%23dc3545' viewBox='0 0 12 12'%3e%3ccircle cx='6' cy='6' r='4.5'/%3e%3cpath stroke-linejoin='round' d='M5.8 3.6h.4L6 6.5z'/%3e%3ccircle cx='6' cy='8.2' r='.6' fill='%23dc3545' stroke='none'/%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right calc(.375em + .1875rem) center;
+    background-size: calc(.75em + .375rem) calc(.75em + .375rem);
+  }
+  
+  .form-control.is-valid {
+    border-color: #198754;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3e%3cpath fill='%23198754' d='M2.3 6.73L.6 4.53c-.4-1.04.46-1.4 1.1-.8l1.1 1.4 3.4-3.8c.6-.63 1.6-.27 1.2.7l-4 4.6c-.43.5-.8.4-1.1.1z'/%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right calc(.375em + .1875rem) center;
+    background-size: calc(.75em + .375rem) calc(.75em + .375rem);
+  }
+  
+  .invalid-feedback {
+    display: block;
+    width: 100%;
+    margin-top: 0.25rem;
+    font-size: 12px;
+    color: #dc3545;
+  }
+  
+  /* Optional: Password strength indicator */
+  .password-strength {
+    margin-top: 8px;
+    height: 4px;
+    border-radius: 2px;
+    background-color: #e9ecef;
+    overflow: hidden;
+  }
+  
+  .password-strength-meter {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.3s ease, background-color 0.3s ease;
+  }
+  
+  .strength-weak {
+    width: 33.33%;
+    background-color: #dc3545;
+  }
+  
+  .strength-medium {
+    width: 66.66%;
+    background-color: #ffc107;
+  }
+  
+  .strength-strong {
+    width: 100%;
+    background-color: #198754;
+  }

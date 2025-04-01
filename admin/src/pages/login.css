@@ -1,0 +1,203 @@
+/* Base styles and variables */
+:root {
+    --primary-color: #7C3AED; /* Purple */
+    --primary-dark: #6D28D9;
+    --primary-light: #DDD6FE;
+    --error-color: #EF4444;
+    --text-color: #374151;
+    --text-light: #6B7280;
+    --text-dark: #1F2937;
+    --border-color: #E5E7EB;
+    --box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+    --border-radius: 8px;
+  }
+  
+  /* Login container */
+  .login-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    background: linear-gradient(135deg, #6D28D9, #9333EA);
+    padding: 20px;
+  }
+  
+  /* Login card */
+  .login-card {
+    background-color: white;
+    border-radius: var(--border-radius);
+    box-shadow: var(--box-shadow);
+    width: 100%;
+    max-width: 420px;
+    animation: fadeIn 0.5s ease-in-out;
+  }
+  
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  
+  /* Login header */
+  .login-header {
+    padding: 32px 32px 24px;
+    text-align: center;
+    border-bottom: 1px solid var(--border-color);
+  }
+  
+  .login-header h2 {
+    margin: 0 0 8px;
+    font-size: 24px;
+    color: var(--text-dark);
+  }
+  
+  .login-header p {
+    margin: 0;
+    color: var(--text-light);
+    font-size: 15px;
+  }
+  
+  /* Login form */
+  .login-form {
+    padding: 32px;
+  }
+  
+  /* Error message */
+  .error-message {
+    background-color: rgba(239, 68, 68, 0.1);
+    color: var(--error-color);
+    padding: 12px 16px;
+    border-radius: 6px;
+    margin-bottom: 20px;
+    font-size: 14px;
+    border-left: 4px solid var(--error-color);
+  }
+  
+  /* Form groups */
+  .form-group {
+    margin-bottom: 20px;
+  }
+  
+  .form-label {
+    display: block;
+    margin-bottom: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-dark);
+  }
+  
+  .form-control {
+    width: 100%;
+    padding: 12px 16px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    font-size: 15px;
+    color: var(--text-color);
+    transition: border-color 0.3s, box-shadow 0.3s;
+  }
+  
+  .form-control:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.15);
+  }
+  
+  .form-control::placeholder {
+    color: #9CA3AF;
+  }
+  
+  .form-control:disabled {
+    background-color: #F3F4F6;
+    cursor: not-allowed;
+  }
+  
+  /* Login button */
+  .login-button {
+    display: block;
+    width: 100%;
+    padding: 14px;
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    border-radius: var(--border-radius);
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.3s;
+    margin-top: 28px;
+  }
+  
+  .login-button:hover {
+    background-color: var(--primary-dark);
+  }
+  
+  .login-button:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.3);
+  }
+  
+  .login-button:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+  }
+  
+  /* Responsive adjustments */
+  @media (max-width: 480px) {
+    .login-card {
+      max-width: 100%;
+    }
+    
+    .login-header, .login-form {
+      padding: 24px 20px;
+    }
+  }
+  
+  /* Optional: Add a nice icon to the input fields */
+  .form-group {
+    position: relative;
+  }
+  
+  .form-group::before {
+    content: '';
+    position: absolute;
+    top: 42px; /* Adjust based on your label height */
+    left: 16px;
+    width: 16px;
+    height: 16px;
+    opacity: 0.5;
+    pointer-events: none;
+  }
+  
+  .form-group:nth-child(2)::before {
+    background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>') no-repeat center;
+  }
+  
+  .form-group:nth-child(3)::before {
+    background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>') no-repeat center;
+  }
+  
+  .form-control {
+    padding-left: 42px;
+  }
+  
+  /* Add a nice loading spinner */
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+  
+  .login-button:disabled::before {
+    content: "";
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    margin-right: 10px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+  }
+  
+  .login-button:disabled {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
