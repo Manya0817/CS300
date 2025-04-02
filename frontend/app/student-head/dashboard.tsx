@@ -1,10 +1,10 @@
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Image, StatusBar, Dimensions } from "react-native";
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, StatusBar, Dimensions } from "react-native";
 import { useRouter } from "expo-router";
 import { useState, useEffect } from "react";
 import { LinearGradient } from "expo-linear-gradient";
-import { auth, db } from "../../firebase";
+import { auth } from "../../firebase";
 import { signOut } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons } from "@expo/vector-icons";
 
 const { width } = Dimensions.get("window");
@@ -13,19 +13,22 @@ export default function StudentHeadDashboard() {
   const router = useRouter();
   const [userName, setUserName] = useState("");
   const [loading, setLoading] = useState(true);
+  const [userMetadata, setUserMetadata] = useState<any>(null);
 
   useEffect(() => {
     const getUserData = async () => {
       try {
-        const user = auth.currentUser;
-        if (user) {
-          const userDoc = await getDoc(doc(db, "users", user.uid));
-          if (userDoc.exists()) {
-            setUserName(userDoc.data().name || "Student Head");
-          }
+        // Retrieve user metadata from AsyncStorage
+        const storedMetadata = await AsyncStorage.getItem("userMetadata");
+        if (storedMetadata) {
+          const metadata = JSON.parse(storedMetadata);
+          setUserMetadata(metadata);
+          setUserName(metadata.name || "Student Head");
+        } else {
+          console.error("No user metadata found in AsyncStorage");
         }
       } catch (error) {
-        console.error("Error fetching user data:", error);
+        console.error("Error fetching user metadata:", error);
       } finally {
         setLoading(false);
       }
@@ -37,6 +40,7 @@ export default function StudentHeadDashboard() {
   const handleLogout = async () => {
     try {
       await signOut(auth);
+      await AsyncStorage.clear();
       router.replace("/");
     } catch (error) {
       console.error("Error signing out:", error);
@@ -84,6 +88,8 @@ export default function StudentHeadDashboard() {
           </View>
         </View>
 
+        
+
         <Text style={styles.sectionTitle}>Management Options</Text>
         <View style={styles.cardContainer}>
           <TouchableOpacity 
@@ -114,7 +120,7 @@ export default function StudentHeadDashboard() {
             </View>
           </TouchableOpacity>
         </View>
-        
+
         <TouchableOpacity 
           style={styles.highlightCard} 
           onPress={() => router.push("/student-head/events")}
@@ -134,27 +140,6 @@ export default function StudentHeadDashboard() {
           </View>
         </TouchableOpacity>
 
-        <View style={styles.statsContainer}>
-          <Text style={styles.sectionTitle}>Quick Stats</Text>
-          <View style={styles.statsRow}>
-            <View style={styles.statCard}>
-              <Ionicons name="people" size={20} color="white" style={styles.statIcon} />
-              <Text style={styles.statValue}>145</Text>
-              <Text style={styles.statLabel}>Students</Text>
-            </View>
-            <View style={styles.statCard}>
-              <Ionicons name="calendar-clear" size={20} color="white" style={styles.statIcon} />
-              <Text style={styles.statValue}>12</Text>
-              <Text style={styles.statLabel}>Classes</Text>
-            </View>
-            <View style={styles.statCard}>
-              <Ionicons name="flask" size={20} color="white" style={styles.statIcon} />
-              <Text style={styles.statValue}>5</Text>
-              <Text style={styles.statLabel}>Upcoming Exams</Text>
-            </View>
-          </View>
-        </View>
-
         <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
           <Ionicons name="log-out-outline" size={20} color="white" style={styles.logoutIcon} />
           <Text style={styles.logoutButtonText}>Logout</Text>
@@ -170,11 +155,11 @@ const styles = StyleSheet.create({
   },
   loadingContainer: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
   },
   loadingText: {
-    color: 'white',
+    color: "white",
     marginTop: 12,
     fontSize: 16,
   },
@@ -194,28 +179,28 @@ const styles = StyleSheet.create({
   },
   header: {
     marginBottom: 30,
-    position: "relative"
+    position: "relative",
   },
   profileSection: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     marginBottom: 16,
   },
   avatarContainer: {
     width: 50,
     height: 50,
     borderRadius: 25,
-    backgroundColor: 'rgba(255,255,255,0.25)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "rgba(255,255,255,0.25)",
+    justifyContent: "center",
+    alignItems: "center",
     marginRight: 16,
     borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.5)',
+    borderColor: "rgba(255,255,255,0.5)",
   },
   avatarText: {
     fontSize: 22,
-    fontWeight: 'bold',
-    color: 'white',
+    fontWeight: "bold",
+    color: "white",
   },
   greeting: {
     fontSize: 24,
@@ -235,13 +220,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
+    flexDirection: "row",
+    alignItems: "center",
   },
   badgeIcon: {
     marginRight: 4,
@@ -251,11 +231,32 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "600",
   },
+  metadataContainer: {
+    marginBottom: 24,
+  },
   sectionTitle: {
     fontSize: 18,
     fontWeight: "700",
     color: "white",
     marginBottom: 16,
+  },
+  metadataContent: {
+    backgroundColor: "rgba(255, 255, 255, 0.1)",
+    padding: 16,
+    borderRadius: 12,
+  },
+  metadataItem: {
+    fontSize: 16,
+    color: "white",
+    marginBottom: 8,
+  },
+  metadataLabel: {
+    fontWeight: "bold",
+    color: "#93C5FD",
+  },
+  metadataError: {
+    fontSize: 16,
+    color: "rgba(255, 255, 255, 0.7)",
   },
   cardContainer: {
     flexDirection: "row",
@@ -269,12 +270,6 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 20,
     marginBottom: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 2,
-    position: 'relative',
   },
   cardAlt: {
     backgroundColor: "rgba(29, 78, 216, 0.4)",
@@ -284,8 +279,8 @@ const styles = StyleSheet.create({
     height: 48,
     borderRadius: 24,
     backgroundColor: "rgba(59, 130, 246, 0.6)",
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     marginBottom: 16,
   },
   cardIconContainerAlt: {
@@ -303,7 +298,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   cardArrow: {
-    position: 'absolute',
+    position: "absolute",
     right: 16,
     top: 16,
   },
@@ -312,33 +307,23 @@ const styles = StyleSheet.create({
     backgroundColor: "white",
     borderRadius: 16,
     marginBottom: 24,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
-    flexDirection: 'row',
-    overflow: 'hidden',
+    flexDirection: "row",
+    overflow: "hidden",
   },
   highlightIconSection: {
     width: 90,
     backgroundColor: "rgba(219, 234, 254, 0.6)",
     padding: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
   },
   highlightIconContainer: {
     width: 56,
     height: 56,
     borderRadius: 28,
     backgroundColor: "white",
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: "#1E3A8A",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    justifyContent: "center",
+    alignItems: "center",
   },
   highlightContent: {
     flex: 1,
@@ -357,48 +342,14 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   highlightAction: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
   highlightActionText: {
     fontSize: 14,
     fontWeight: "600",
     color: "#3B82F6",
     marginRight: 6,
-  },
-  statsContainer: {
-    marginBottom: 24,
-  },
-  statsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  statCard: {
-    flex: 1,
-    backgroundColor: "rgba(30, 58, 138, 0.5)",
-    borderRadius: 12,
-    padding: 16,
-    alignItems: 'center',
-    marginHorizontal: 4,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  statIcon: {
-    marginBottom: 8,
-  },
-  statValue: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "white",
-  },
-  statLabel: {
-    fontSize: 12,
-    color: "rgba(255,255,255,0.7)",
-    textAlign: 'center',
-    marginTop: 4,
   },
   logoutButton: {
     backgroundColor: "rgba(30, 58, 138, 0.6)",
@@ -407,13 +358,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginTop: 8,
     marginBottom: 24,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    flexDirection: "row",
+    justifyContent: "center",
   },
   logoutButtonText: {
     fontSize: 16,

@@ -15,6 +15,7 @@ import {
   import { signInWithEmailAndPassword } from "firebase/auth";
   import { auth, db } from "../firebase";
   import { doc, getDoc } from "firebase/firestore";
+import AsyncStorage from "@react-native-async-storage/async-storage";
   
   export default function LoginScreen() {
     const router = useRouter();
@@ -34,7 +35,7 @@ import {
       setEmailError("");
       setPasswordError("");
       let isValid = true;
-  
+    
       if (!email) {
         setEmailError("Email is required");
         isValid = false;
@@ -42,55 +43,61 @@ import {
         setEmailError("Please enter a valid email");
         isValid = false;
       }
-  
+    
       if (!password) {
         setPasswordError("Password is required");
         isValid = false;
       }
-  
+    
       if (isValid) {
         setLoading(true);
         try {
-            // Authenticate the user
-            const userCredential = await signInWithEmailAndPassword(auth, email, password);
-            const user = userCredential.user;
-            
-            // Get user role from Firestore
-            const userDocRef = doc(db, "users", user.uid);
-            const userDoc = await getDoc(userDocRef);
-            
-            if (userDoc.exists()) {
-              const userData = userDoc.data();
-              const userRole = userData.role;
-              
-              // Navigate based on role
-              switch (userRole) {
-                case "student":
-                  router.replace("./student/dashboard");
-                  break;
-                case "student-head":
-                  router.replace("./student-head/dashboard");
-                  break;
-                case "faculty-head":
-                  router.replace("./faculty-head/dashboard");
-                  break;
-             
-                default:
-                  router.replace("/"); // Default fallback
-              }
-            } else {
-              // User document doesn't exist in Firestore
-              setPasswordError("Account error. Please contact support.");
-              console.error("User document not found in Firestore");
+          // Authenticate the user
+          const userCredential = await signInWithEmailAndPassword(auth, email, password);
+          const user = userCredential.user;
+    
+          // Get user role and metadata from Firestore
+          const userDocRef = doc(db, "users", user.uid);
+          const userDoc = await getDoc(userDocRef);
+    
+          if (userDoc.exists()) {
+            const userData = userDoc.data();
+            const userRole = userData.role;
+    
+            // Store user metadata in AsyncStorage
+            await AsyncStorage.setItem("userId", user.uid);
+            await AsyncStorage.setItem("userRole", userRole);
+            await AsyncStorage.setItem("userMetadata", JSON.stringify(userData));
+    
+            console.log("User metadata stored in AsyncStorage:", userData);
+    
+            // Navigate based on role
+            switch (userRole) {
+              case "student":
+                router.replace("./student/dashboard");
+                break;
+              case "student-head":
+                router.replace("./student-head/dashboard");
+                break;
+              case "faculty-head":
+                router.replace("./faculty-head/dashboard");
+                break;
+              default:
+                router.replace("/"); // Default fallback
             }
-          }  catch (err: any) {
-            if (err.code === "auth/user-not-found" || err.code === "auth/wrong-password") {
-              setPasswordError("Invalid email or password");
-            } else {
-              setPasswordError("Login failed. Please try again.");
-              console.error("Login error:", err);
-            }
-          } finally {
+          } else {
+            // User document doesn't exist in Firestore
+            setPasswordError("Account error. Please contact support.");
+            console.error("User document not found in Firestore");
+          }
+        } catch (err: any) {
+          if (err.code === "auth/user-not-found" || err.code === "auth/wrong-password") {
+            setPasswordError("Invalid email or password");
+          } else {
+            setPasswordError("Login failed. Please try again.");
+            console.error("Login error:", err);
+          }
+        } finally {
           setLoading(false);
         }
       }

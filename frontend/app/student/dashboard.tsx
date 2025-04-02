@@ -278,6 +278,13 @@ export default function StudentDashboard() {
     });
   };
 
+  const navigateToEvents = () => {
+    router.push({
+      pathname: './events',
+      params: { preserve: "true"  }
+    });
+  };
+
   // Display student role/course if available
   const getStudentSubtitle = () => {
     if (studentInfo) {
@@ -410,6 +417,16 @@ export default function StudentDashboard() {
                 <User size={24} color="#9333EA" />
               </View>
               <Text style={styles.quickActionText}>My Profile</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.quickActionCard}
+              onPress={navigateToEvents}
+            >
+              <View style={styles.quickActionIconContainer}>
+                <User size={24} color="#9333EA" />
+              </View>
+              <Text style={styles.quickActionText}>My Events</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
