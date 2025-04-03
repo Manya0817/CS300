@@ -54,6 +54,13 @@ export default function StudentHeadLayout() {
           }} 
         />
         <Stack.Screen 
+          name="notifications" 
+          options={{ 
+            headerShown: false 
+          }} 
+        />
+        
+        <Stack.Screen 
           name="profile" 
           options={{ 
             headerTitle: "My Profile",

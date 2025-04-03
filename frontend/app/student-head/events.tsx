@@ -9,25 +9,25 @@ import {
   ScrollView,
   FlatList,
   Animated,
+  SafeAreaView,
+  StatusBar as RNStatusBar,
   Alert,
 } from "react-native";
-import { Calendar } from "react-native-calendars";
-import { format } from "date-fns";
-import { db } from "../../firebase"; // Ensure this points to your Firebase configuration
-import {
-  collection,
-  addDoc,
-  deleteDoc,
-  doc,
-  onSnapshot,
-  updateDoc,
-} from "firebase/firestore";
+import { LinearGradient } from 'expo-linear-gradient';
+import { StatusBar } from 'expo-status-bar';
+import { format, parseISO, getDay, eachDayOfInterval, startOfMonth, endOfMonth, addDays } from "date-fns";
+import { db } from "../../firebase";
+
+import { collection, addDoc, deleteDoc, doc, onSnapshot, updateDoc, getDocs, writeBatch } from "firebase/firestore";
+import { ArrowLeft, Calendar as CalendarIcon, Clock, ChevronLeft, ChevronRight } from 'lucide-react-native';
+import { useRouter } from 'expo-router';
+import styles from "./eventsStyles"; // Assuming styles are imported from a separate file
 
 interface EventItem {
   id: string;
   title: string;
   date: string;
-  time: string;
+  time: string; // Will store "startTime - endTime" (e.g., "10:00 AM - 12:00 PM")
   description: string;
   color: string;
 }
@@ -43,30 +43,25 @@ const colorOptions = [
   { name: "yellow", color: "#ffc107" },
 ];
 
-const events = () => {
-  // Use different state names to avoid conflict with the component name
+const MAX_EVENTS_PREVIEW = 3;
+const WEEK_DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+const Events = () => {
+  const router = useRouter();
   const [eventList, setEventList] = useState<EventItem[]>([]);
   const [addModalVisible, setAddModalVisible] = useState(false);
   const [viewModalVisible, setViewModalVisible] = useState(false);
-  const [selectedDate, setSelectedDate] = useState("");
+  const [selectedDate, setSelectedDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [selectedEvent, setSelectedEvent] = useState<EventItem | null>(null);
   const [selectedColor, setSelectedColor] = useState("blue");
-  const [tooltipVisible, setTooltipVisible] = useState(false);
-  const [tooltipEvent, setTooltipEvent] = useState<EventItem | null>(null);
-  const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
-
-  // Form state for add & edit
+  const [currentMonth, setCurrentMonth] = useState(format(new Date(), 'yyyy-MM'));
+  const [isEditing, setIsEditing] = useState(false);
   const [title, setTitle] = useState("");
   const [date, setDate] = useState("");
-  const [time, setTime] = useState("");
+  const [startTime, setStartTime] = useState("");
+  const [endTime, setEndTime] = useState("");
   const [description, setDescription] = useState("");
-
-  // Flag to indicate if the view modal is in edit mode
-  const [isEditing, setIsEditing] = useState(false);
-
-  // Animation values
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const tooltipFadeAnim = useRef(new Animated.Value(0)).current;
 
   // Subscribe to events from Firestore
   useEffect(() => {
@@ -87,165 +82,158 @@ const events = () => {
     return unsubscribe;
   }, []);
 
-  // Format calendar marked dates
-  const getMarkedDates = () => {
-    const markedDates: any = {};
-
-    eventList.forEach((event) => {
-      if (!markedDates[event.date]) {
-        markedDates[event.date] = {
-          marked: true,
-          dots: [
-            {
-              color:
-                colorOptions.find((c) => c.name === event.color)?.color ||
-                "#3788d8",
-            },
-          ],
-        };
-      } else {
-        markedDates[event.date].dots.push({
-          color:
-            colorOptions.find((c) => c.name === event.color)?.color ||
-            "#3788d8",
-        });
-      }
-    });
-
-    return markedDates;
-  };
-
   // Get events for a specific date
   const getEventsForDate = (date: string) => {
     return eventList.filter((event) => event.date === date);
   };
 
-  // Handle date selection
-  const handleDateSelect = (day: any) => {
-    const dateStr = day.dateString;
-    setSelectedDate(dateStr);
-
-    const dateEvents = getEventsForDate(dateStr);
-    if (dateEvents.length > 0) {
-      // If there are events, simply display them
-    } else {
-      setDate(dateStr);
-      resetForm();
-      setAddModalVisible(true);
-    }
-  };
-
-  // Double tap tracking
-  const lastTap = useRef(0);
-  const handleDatePress = (day: any) => {
-    const now = Date.now();
-    const DOUBLE_PRESS_DELAY = 300;
-    if (now - lastTap.current < DOUBLE_PRESS_DELAY) {
-      setDate(day.dateString);
-      resetForm();
-      setAddModalVisible(true);
-    }
-    lastTap.current = now;
-  };
-
   // Reset form fields
   const resetForm = () => {
     setTitle("");
-    setTime("");
+    setStartTime("");
+    setEndTime("");
     setDescription("");
     setSelectedColor("blue");
   };
 
-  // Add a new event to Firestore
+  // Function to validate time format (hh:mm AM/PM)
+  const isValidTimeFormat = (time: string) => {
+    const timeRegex = /^(0?[1-9]|1[0-2]):[0-5][0-9] (AM|PM)$/i;
+    return timeRegex.test(time);
+  };
+
   const addEvent = async () => {
-    if (!title || !date) {
-      Alert.alert("Error", "Title and date are required!");
+    if (!title || !date || !startTime || !endTime) {
+      Alert.alert("Missing Information", "Title, date, start time, and end time are required!");
       return;
     }
-
-    const newEvent = {
-      title,
-      date,
-      time,
-      description,
-      color: selectedColor,
-    };
-
+  
+    if (!isValidTimeFormat(startTime) || !isValidTimeFormat(endTime)) {
+      Alert.alert("Invalid Time Format", "Please enter time in format: hh:mm AM/PM (e.g., 10:00 AM)");
+      return;
+    }
+  
+    const timeRange = `${startTime} - ${endTime}`;
+    const newEvent = { title, date, time: timeRange, description, color: selectedColor };
+  
     try {
-      await addDoc(collection(db, "events"), newEvent);
+      // Add the event to Firestore
+      const eventRef = await addDoc(collection(db, "events"), newEvent);
+  
+      // Fetch all users to send notifications
+      const users = await fetchAllUsers();
+  
+      // Prepare notifications for all users
+      const batch = writeBatch(db);
+      users.forEach((user) => {
+        const notificationRef = doc(collection(db, "user-notifications"));
+        batch.set(notificationRef, {
+          userId: user.id,
+          title: "New Event Added",
+          body: `Event "${title}" is scheduled on ${date} (${timeRange}).`,
+          read: false,
+          createdAt: new Date().toISOString(),
+          type: "event",
+          eventId: eventRef.id, // Link the notification to the event
+        });
+      });
+  
+      // Commit the batch operation
+      await batch.commit();
+  
       setAddModalVisible(false);
       resetForm();
-      Alert.alert("Success", "Event added successfully!");
+      Alert.alert("Success", "Event added successfully, and notifications sent!");
     } catch (error: any) {
       Alert.alert("Error", error.message);
     }
   };
 
-  // Update an existing event in Firestore
   const updateEvent = async () => {
-    if (!selectedEvent) return;
-    if (!title || !date) {
-      Alert.alert("Error", "Title and date are required!");
+    if (!selectedEvent || !title || !date || !startTime || !endTime) {
+      Alert.alert("Missing Information", "Title, date, start time, and end time are required!");
       return;
     }
-    const updatedData = {
-      title,
-      date,
-      time,
-      description,
-      color: selectedColor,
-    };
-
+  
+    if (!isValidTimeFormat(startTime) || !isValidTimeFormat(endTime)) {
+      Alert.alert("Invalid Time Format", "Please enter time in format: hh:mm AM/PM (e.g., 10:00 AM)");
+      return;
+    }
+  
+    const timeRange = `${startTime} - ${endTime}`;
+    const updatedData = { title, date, time: timeRange, description, color: selectedColor };
+  
     try {
+      // Update the event in Firestore
       const eventRef = doc(db, "events", selectedEvent.id);
       await updateDoc(eventRef, updatedData);
+  
+      // Fetch all users to send notifications
+      const users = await fetchAllUsers();
+  
+      // Prepare notifications for all users
+      const batch = writeBatch(db);
+      users.forEach((user) => {
+        const notificationRef = doc(collection(db, "user-notifications"));
+        batch.set(notificationRef, {
+          userId: user.id,
+          title: "Event Updated",
+          body: `The event "${title}" has been updated. It is now scheduled on ${date} (${timeRange}).`,
+          read: false,
+          createdAt: new Date().toISOString(),
+          type: "event",
+          eventId: selectedEvent.id, // Link the notification to the updated event
+        });
+      });
+  
+      // Commit the batch operation
+      await batch.commit();
+  
       setIsEditing(false);
       setViewModalVisible(false);
       setSelectedEvent(null);
-      Alert.alert("Success", "Event updated successfully!");
+      Alert.alert("Success", "Event updated successfully, and notifications sent!");
     } catch (error: any) {
       Alert.alert("Error", error.message);
     }
   };
 
-  // Delete event from Firestore
-  const deleteEvent = async () => {
-    if (!selectedEvent) return;
 
+
+   const deleteEvent = async () => {
+    if (!selectedEvent) return;
+  
     try {
+      // Delete the event from Firestore
       await deleteDoc(doc(db, "events", selectedEvent.id));
+  
+      // Fetch all users to send notifications
+      const users = await fetchAllUsers();
+  
+      // Prepare notifications for all users
+      const batch = writeBatch(db);
+      users.forEach((user) => {
+        const notificationRef = doc(collection(db, "user-notifications"));
+        batch.set(notificationRef, {
+          userId: user.id,
+          title: "Event Deleted",
+          body: `The event "${selectedEvent.title}" scheduled on ${selectedEvent.date} has been deleted.`,
+          read: false,
+          createdAt: new Date().toISOString(),
+          type: "event",
+          eventId: selectedEvent.id, // Link the notification to the deleted event
+        });
+      });
+  
+      // Commit the batch operation
+      await batch.commit();
+  
       setViewModalVisible(false);
       setSelectedEvent(null);
+      Alert.alert("Success", "Event deleted successfully, and notifications sent!");
     } catch (error: any) {
       Alert.alert("Error", error.message);
     }
-  };
-
-  // Show event tooltip
-  const showTooltip = (event: EventItem, x: number, y: number) => {
-    setTooltipEvent(event);
-    setTooltipPosition({ x, y });
-    setTooltipVisible(true);
-
-    Animated.timing(tooltipFadeAnim, {
-      toValue: 1,
-      duration: 200,
-      useNativeDriver: true,
-    }).start();
-
-    setTimeout(() => hideTooltip(), 3000);
-  };
-
-  // Hide tooltip
-  const hideTooltip = () => {
-    Animated.timing(tooltipFadeAnim, {
-      toValue: 0,
-      duration: 200,
-      useNativeDriver: true,
-    }).start(() => {
-      setTooltipVisible(false);
-      setTooltipEvent(null);
-    });
   };
 
   // Animate modal on open
@@ -259,21 +247,60 @@ const events = () => {
     }
   }, [addModalVisible, viewModalVisible]);
 
-  // Prepare form fields for editing when opening view modal
+  // Prepare form fields for editing
   const handleEdit = (event: EventItem) => {
     setIsEditing(true);
     setTitle(event.title);
     setDate(event.date);
-    setTime(event.time);
+    const [start, end] = event.time.split(" - ");
+    setStartTime(start || "");
+    setEndTime(end || "");
     setDescription(event.description);
     setSelectedColor(event.color);
+    setViewModalVisible(true);
   };
 
-  // Render event item in the list
-  const renderEventItem = ({ item }: { item: EventItem }) => {
-    const eventColor =
-      colorOptions.find((c) => c.name === item.color)?.color || "#3788d8";
+  // Generate grid calendar data
+  const generateGridCalendarData = () => {
+    const monthStart = startOfMonth(parseISO(`${currentMonth}-01`));
+    const monthEnd = endOfMonth(monthStart);
+    const startDate = addDays(monthStart, -getDay(monthStart));
+    const days = eachDayOfInterval({ start: startDate, end: monthEnd });
+    const weeksData = [];
+    for (let i = 0; i < days.length; i += 7) {
+      const weekDays = days.slice(i, i + 7);
+      weeksData.push(weekDays);
+      if (format(weekDays[weekDays.length - 1], 'yyyy-MM') !== format(monthStart, 'yyyy-MM')) {
+        if (weekDays.some(day => format(day, 'yyyy-MM') === format(monthStart, 'yyyy-MM'))) {
+          continue;
+        } else {
+          break;
+        }
+      }
+    }
+    return weeksData;
+  };
 
+  // Navigate months
+  const goToPreviousMonth = () => {
+    const [year, month] = currentMonth.split('-').map(num => parseInt(num));
+    let newMonth = month - 1;
+    let newYear = year;
+    if (newMonth === 0) { newMonth = 12; newYear--; }
+    setCurrentMonth(`${newYear}-${newMonth < 10 ? `0${newMonth}` : newMonth}`);
+  };
+
+  const goToNextMonth = () => {
+    const [year, month] = currentMonth.split('-').map(num => parseInt(num));
+    let newMonth = month + 1;
+    let newYear = year;
+    if (newMonth === 13) { newMonth = 1; newYear++; }
+    setCurrentMonth(`${newYear}-${newMonth < 10 ? `0${newMonth}` : newMonth}`);
+  };
+
+  // Render event item
+  const renderEventItem = ({ item }: { item: EventItem }) => {
+    const eventColor = colorOptions.find((c) => c.name === item.color)?.color || "#3788d8";
     return (
       <TouchableOpacity
         style={[styles.eventItem, { borderLeftColor: eventColor }]}
@@ -281,111 +308,173 @@ const events = () => {
           setSelectedEvent(item);
           setViewModalVisible(true);
         }}
-        onLongPress={(e) => {
-          const { pageX, pageY } = e.nativeEvent;
-          showTooltip(item, pageX, pageY - 100);
-        }}
       >
-        <View style={styles.eventItemContent}>
-          <View style={styles.eventItemHeader}>
-            <Text style={styles.eventTitle}>{item.title}</Text>
-            <View style={[styles.colorDot, { backgroundColor: eventColor }]} />
-          </View>
-          {item.time ? <Text style={styles.eventTime}>{item.time}</Text> : null}
-          {item.description ? (
-            <Text style={styles.eventDescription} numberOfLines={2}>
-              {item.description}
-            </Text>
-          ) : null}
+        <View style={styles.eventHeader}>
+          <Text style={styles.eventTitle}>{item.title}</Text>
         </View>
+        {item.time && (
+          <View style={styles.eventDetailRow}>
+            <Clock size={16} color="#B799FF" style={styles.eventDetailIcon} />
+            <Text style={styles.eventDetailText}>{item.time}</Text>
+          </View>
+        )}
+        {item.description && (
+          <Text style={styles.eventDescription} numberOfLines={2}>{item.description}</Text>
+        )}
       </TouchableOpacity>
     );
   };
 
-  return (
-    <View style={styles.container}>
-      <Text style={styles.header}>📅 My Colorful Event Calendar</Text>
+  // Render grid calendar day cell
+  const renderDayCell = (date: Date) => {
+    const dateString = format(date, 'yyyy-MM-dd');
+    const isCurrentMonth = format(date, 'yyyy-MM') === currentMonth;
+    const isToday = dateString === format(new Date(), 'yyyy-MM-dd');
+    const isSelected = dateString === selectedDate;
+    const dayEvents = getEventsForDate(dateString);
+    const hasEvents = dayEvents.length > 0;
 
-      {/* Calendar */}
-      <View style={styles.calendarContainer}>
-        <Calendar
-          markedDates={getMarkedDates()}
-          onDayPress={handleDateSelect}
-          onDayLongPress={handleDatePress}
-          theme={{
-            calendarBackground: "#2C003E",
-            textSectionTitleColor: "#E0C3FC",
-            selectedDayBackgroundColor: "#6F42C1",
-            selectedDayTextColor: "#ffffff",
-            todayTextColor: "#B799FF",
-            dayTextColor: "#E0C3FC",
-            textDisabledColor: "#555",
-            dotColor: "#E0C3FC",
-            selectedDotColor: "#ffffff",
-            arrowColor: "#E0C3FC",
-            monthTextColor: "#E0C3FC",
-            indicatorColor: "#E0C3FC",
-          }}
-          markingType="multi-dot"
-        />
-      </View>
-
-      {/* Events for selected date */}
-      {selectedDate ? (
-        <View style={styles.eventsContainer}>
-          <View style={styles.eventsHeader}>
-            <Text style={styles.eventsHeaderText}>
-              Events for {format(new Date(selectedDate), "MMM dd, yyyy")}
-            </Text>
-            <TouchableOpacity
-              style={styles.addButton}
-              onPress={() => {
-                setDate(selectedDate);
-                resetForm();
-                setAddModalVisible(true);
-              }}
-            >
-              <Text style={styles.addButtonText}>+ Add</Text>
-            </TouchableOpacity>
+    return (
+      <TouchableOpacity
+        key={dateString}
+        style={[
+          styles.dayCell,
+          !isCurrentMonth && styles.otherMonthDay,
+          isToday && styles.todayCell,
+          isSelected && styles.selectedCell,
+        ]}
+        onPress={() => {
+          setSelectedDate(dateString);
+          setDate(dateString);
+          resetForm();
+          setAddModalVisible(true); // Open modal on date click
+        }}
+      >
+        <Text style={[
+          styles.dayNumber,
+          !isCurrentMonth && styles.otherMonthDayText,
+          isToday && styles.todayText,
+          isSelected && styles.selectedText,
+        ]}>
+          {format(date, 'd')}
+        </Text>
+        {hasEvents && (
+          <View style={styles.dayCellEventsContainer}>
+            {dayEvents.slice(0, MAX_EVENTS_PREVIEW).map((event, index) => (
+              <View
+                key={`${event.id}-${index}`}
+                style={[styles.dayCellEvent, { backgroundColor: colorOptions.find(c => c.name === event.color)?.color || '#3788d8' }]}
+              >
+                <Text style={styles.dayCellEventText} numberOfLines={1}>{event.title}</Text>
+              </View>
+            ))}
+            {dayEvents.length > MAX_EVENTS_PREVIEW && (
+              <View style={styles.moreEventsIndicator}>
+                <Text style={styles.moreEventsText}>+{dayEvents.length - MAX_EVENTS_PREVIEW} more</Text>
+              </View>
+            )}
           </View>
+        )}
+      </TouchableOpacity>
+    );
+  };
 
+  // Render grid calendar
+  const renderGridCalendar = () => {
+    const weeksData = generateGridCalendarData();
+    return (
+      <View style={styles.gridCalendarContainer}>
+        <View style={styles.monthNavigator}>
+          <TouchableOpacity style={styles.monthNavigatorButton} onPress={goToPreviousMonth}>
+            <ChevronLeft size={20} color="#E0C3FC" />
+          </TouchableOpacity>
+          <Text style={styles.monthYearText}>{format(parseISO(`${currentMonth}-01`), 'MMMM yyyy')}</Text>
+          <TouchableOpacity style={styles.monthNavigatorButton} onPress={goToNextMonth}>
+            <ChevronRight size={20} color="#E0C3FC" />
+          </TouchableOpacity>
+        </View>
+        <View style={styles.weekdayHeaderRow}>
+          {WEEK_DAYS.map((day, index) => (
+            <View key={index} style={styles.weekdayHeaderCell}>
+              <Text style={styles.weekdayHeaderText}>{day}</Text>
+            </View>
+          ))}
+        </View>
+        {weeksData.map((week, weekIndex) => (
+          <View key={`week-${weekIndex}`} style={styles.calendarRow}>
+            {week.map((day) => renderDayCell(day))}
+          </View>
+        ))}
+      </View>
+    );
+  };
+
+  const fetchAllUsers = async () => {
+    try {
+      const usersCollectionRef = collection(db, "users");
+      const snapshot = await getDocs(usersCollectionRef);
+      const users = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...(doc.data() as { email: string; name: string }),
+      }));
+      return users;
+    } catch (error: any) {
+      console.error("Error fetching users:", error.message);
+      return [];
+    }
+  };
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <StatusBar style="light" />
+      <LinearGradient colors={["#231942", "#5E548E", "#9F86C0"]} style={styles.backgroundGradient} />
+      <View style={styles.header}>
+        <TouchableOpacity style={styles.backButton} onPress={() => router.push('./dashboard')}>
+          <ArrowLeft size={24} color="#E0C3FC" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Manage Events</Text>
+        {/* Removed Add button */}
+      </View>
+      <ScrollView style={styles.contentContainer} contentContainerStyle={styles.scrollContent}>
+        {renderGridCalendar()}
+        <View style={styles.eventsContainer}>
+          <View style={styles.eventsHeaderContainer}>
+            <Text style={styles.eventsHeaderText}>
+              Events for {format(parseISO(selectedDate), 'MMMM d, yyyy')}
+            </Text>
+            <View style={styles.eventsHeaderLine} />
+          </View>
           {getEventsForDate(selectedDate).length > 0 ? (
             <FlatList
               data={getEventsForDate(selectedDate)}
               renderItem={renderEventItem}
               keyExtractor={(item) => item.id}
-              style={styles.eventsList}
+              contentContainerStyle={styles.listContent}
             />
           ) : (
             <View style={styles.noEventsContainer}>
+              <CalendarIcon size={40} color="rgba(224, 195, 252, 0.5)" />
               <Text style={styles.noEventsText}>No events for this day</Text>
-              <Text style={styles.noEventsSubtext}>
-                Tap "Add" to create a new event
-              </Text>
             </View>
           )}
         </View>
-      ) : null}
+      </ScrollView>
 
-      {/* Add Event Modal */}
       <Modal
         animationType="fade"
         transparent={true}
         visible={addModalVisible}
         onRequestClose={() => setAddModalVisible(false)}
       >
-        <View style={styles.modalBackground}>
-          <Animated.View style={[styles.modalContainer, { opacity: fadeAnim }]}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalHeaderText}>Add New Event</Text>
-              <TouchableOpacity
-                onPress={() => setAddModalVisible(false)}
-                style={styles.closeButton}
-              >
-                <Text style={styles.closeButtonText}>×</Text>
-              </TouchableOpacity>
-            </View>
+        <View style={styles.modalOverlay}>
+          <Animated.View style={[styles.addEventModalContainer, { opacity: fadeAnim }]}>
             <ScrollView style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalHeaderText}>Add New Event</Text>
+                <TouchableOpacity onPress={() => setAddModalVisible(false)} style={styles.closeButton}>
+                  <Text style={styles.closeButtonText}>×</Text>
+                </TouchableOpacity>
+              </View>
               <View style={styles.formGroup}>
                 <Text style={styles.label}>Event Title:</Text>
                 <TextInput
@@ -399,18 +488,26 @@ const events = () => {
               <View style={styles.formGroup}>
                 <Text style={styles.label}>Event Date:</Text>
                 <Text style={styles.dateText}>
-                  {date
-                    ? format(new Date(date), "MMMM dd, yyyy")
-                    : "Select a date"}
+                  {date ? format(new Date(date), "MMMM dd, yyyy") : "Select a date"}
                 </Text>
               </View>
               <View style={styles.formGroup}>
-                <Text style={styles.label}>Event Time:</Text>
+                <Text style={styles.label}>Start Time (format: hh:mm AM/PM):</Text>
                 <TextInput
                   style={styles.input}
-                  value={time}
-                  onChangeText={setTime}
-                  placeholder="Ex: 10:00 AM"
+                  value={startTime}
+                  onChangeText={setStartTime}
+                  placeholder="e.g., 10:00 AM"
+                  placeholderTextColor="#aaa"
+                />
+              </View>
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>End Time (format: hh:mm AM/PM):</Text>
+                <TextInput
+                  style={styles.input}
+                  value={endTime}
+                  onChangeText={setEndTime}
+                  placeholder="e.g., 11:00 AM"
                   placeholderTextColor="#aaa"
                 />
               </View>
@@ -436,8 +533,7 @@ const events = () => {
                       style={[
                         styles.colorOption,
                         { backgroundColor: option.color },
-                        selectedColor === option.name &&
-                          styles.selectedColorOption,
+                        selectedColor === option.name && styles.selectedColorOption,
                       ]}
                       onPress={() => setSelectedColor(option.name)}
                     />
@@ -453,89 +549,39 @@ const events = () => {
       </Modal>
 
       {/* View/Edit Event Modal */}
-      <Modal
-        animationType="fade"
-        transparent={true}
-        visible={viewModalVisible}
-        onRequestClose={() => {
-          setViewModalVisible(false);
-          setIsEditing(false);
-        }}
-      >
-        <View style={styles.modalBackground}>
+      <Modal animationType="fade" transparent={true} visible={viewModalVisible} onRequestClose={() => setViewModalVisible(false)}>
+        <View style={styles.modalOverlay}>
           <Animated.View style={[styles.modalContainer, { opacity: fadeAnim }]}>
             {selectedEvent && !isEditing && (
               <>
-                <View
-                  style={[
-                    styles.modalHeader,
-                    {
-                      borderTopWidth: 6,
-                      borderTopColor:
-                        colorOptions.find((c) => c.name === selectedEvent.color)
-                          ?.color || "#3788d8",
-                    },
-                  ]}
-                >
-                  <Text style={styles.modalHeaderText}>Event Details</Text>
-                  <TouchableOpacity
-                    onPress={() => setViewModalVisible(false)}
-                    style={styles.closeButton}
-                  >
-                    <Text style={styles.closeButtonText}>×</Text>
-                  </TouchableOpacity>
+                <View style={[styles.modalColorStrip, { backgroundColor: colorOptions.find(c => c.name === selectedEvent.color)?.color || '#3788d8' }]} />
+                <Text style={styles.modalTitle}>{selectedEvent.title}</Text>
+                <View style={styles.modalDetailRow}>
+                  <CalendarIcon size={18} color="#B799FF" style={styles.modalDetailIcon} />
+                  <Text style={styles.modalDetailText}>{format(parseISO(selectedEvent.date), 'EEEE, MMMM d, yyyy')}</Text>
                 </View>
-                <View style={styles.modalContent}>
-                  <View style={styles.eventDetailRow}>
-                    <Text style={styles.eventDetailLabel}>Title:</Text>
-                    <Text style={styles.eventDetailValue}>
-                      {selectedEvent.title}
-                    </Text>
+                {selectedEvent.time && (
+                  <View style={styles.modalDetailRow}>
+                    <Clock size={18} color="#B799FF" style={styles.modalDetailIcon} />
+                    <Text style={styles.modalDetailText}>{selectedEvent.time}</Text>
                   </View>
-                  <View style={styles.eventDetailRow}>
-                    <Text style={styles.eventDetailLabel}>Date:</Text>
-                    <Text style={styles.eventDetailValue}>
-                      {format(new Date(selectedEvent.date), "MMMM dd, yyyy")}
-                    </Text>
+                )}
+                {selectedEvent.description && (
+                  <View style={styles.modalDescription}>
+                    <Text style={styles.modalDescriptionLabel}>Description</Text>
+                    <Text style={styles.modalDescriptionText}>{selectedEvent.description}</Text>
                   </View>
-                  {selectedEvent.time && (
-                    <View style={styles.eventDetailRow}>
-                      <Text style={styles.eventDetailLabel}>Time:</Text>
-                      <Text style={styles.eventDetailValue}>
-                        {selectedEvent.time}
-                      </Text>
-                    </View>
-                  )}
-                  <View style={styles.eventDetailRow}>
-                    <Text style={styles.eventDetailLabel}>Description:</Text>
-                    <Text style={styles.eventDetailValue}>
-                      {selectedEvent.description || "No description provided"}
-                    </Text>
-                  </View>
-                  <View style={styles.modalActions}>
-                    <TouchableOpacity
-                      style={styles.closeViewButton}
-                      onPress={() => {
-                        setViewModalVisible(false);
-                        setIsEditing(false);
-                        setSelectedEvent(null);
-                      }}
-                    >
-                      <Text style={styles.closeViewButtonText}>Close</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.deleteButton}
-                      onPress={deleteEvent}
-                    >
-                      <Text style={styles.deleteButtonText}>Delete Event</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.editButton}
-                      onPress={() => handleEdit(selectedEvent)}
-                    >
-                      <Text style={styles.editButtonText}>Edit</Text>
-                    </TouchableOpacity>
-                  </View>
+                )}
+                <View style={styles.modalActions}>
+                  <TouchableOpacity style={styles.closeViewButton} onPress={() => setViewModalVisible(false)}>
+                    <Text style={styles.closeViewButtonText}>Close</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.deleteButton} onPress={deleteEvent}>
+                    <Text style={styles.deleteButtonText}>Delete Event</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.editButton} onPress={() => handleEdit(selectedEvent)}>
+                    <Text style={styles.editButtonText}>Edit</Text>
+                  </TouchableOpacity>
                 </View>
               </>
             )}
@@ -543,14 +589,7 @@ const events = () => {
               <>
                 <View style={styles.modalHeader}>
                   <Text style={styles.modalHeaderText}>Edit Event</Text>
-                  <TouchableOpacity
-                    onPress={() => {
-                      setIsEditing(false);
-                      setViewModalVisible(false);
-                      setSelectedEvent(null);
-                    }}
-                    style={styles.closeButton}
-                  >
+                  <TouchableOpacity onPress={() => { setIsEditing(false); setViewModalVisible(false); }} style={styles.closeButton}>
                     <Text style={styles.closeButtonText}>×</Text>
                   </TouchableOpacity>
                 </View>
@@ -568,18 +607,26 @@ const events = () => {
                   <View style={styles.formGroup}>
                     <Text style={styles.label}>Event Date:</Text>
                     <Text style={styles.dateText}>
-                      {date
-                        ? format(new Date(date), "MMMM dd, yyyy")
-                        : "Select a date"}
+                      {date ? format(new Date(date), "MMMM dd, yyyy") : "Select a date"}
                     </Text>
                   </View>
                   <View style={styles.formGroup}>
-                    <Text style={styles.label}>Event Time:</Text>
+                    <Text style={styles.label}>Start Time (format: hh:mm AM/PM):</Text>
                     <TextInput
                       style={styles.input}
-                      value={time}
-                      onChangeText={setTime}
-                      placeholder="Ex: 10:00 AM"
+                      value={startTime}
+                      onChangeText={setStartTime}
+                      placeholder="e.g., 10:00 AM"
+                      placeholderTextColor="#aaa"
+                    />
+                  </View>
+                  <View style={styles.formGroup}>
+                    <Text style={styles.label}>End Time (format: hh:mm AM/PM):</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={endTime}
+                      onChangeText={setEndTime}
+                      placeholder="e.g., 11:00 AM"
                       placeholderTextColor="#aaa"
                     />
                   </View>
@@ -605,8 +652,7 @@ const events = () => {
                           style={[
                             styles.colorOption,
                             { backgroundColor: option.color },
-                            selectedColor === option.name &&
-                              styles.selectedColorOption,
+                            selectedColor === option.name && styles.selectedColorOption,
                           ]}
                           onPress={() => setSelectedColor(option.name)}
                         />
@@ -614,19 +660,11 @@ const events = () => {
                     </View>
                   </View>
                   <View style={styles.modalActions}>
-                    <TouchableOpacity
-                      style={styles.closeViewButton}
-                      onPress={() => setIsEditing(false)}
-                    >
+                    <TouchableOpacity style={styles.closeViewButton} onPress={() => setIsEditing(false)}>
                       <Text style={styles.closeViewButtonText}>Cancel</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.submitButton}
-                      onPress={updateEvent}
-                    >
-                      <Text style={styles.submitButtonText}>
-                        Save Changes
-                      </Text>
+                    <TouchableOpacity style={styles.submitButton} onPress={updateEvent}>
+                      <Text style={styles.submitButtonText}>Save Changes</Text>
                     </TouchableOpacity>
                   </View>
                 </ScrollView>
@@ -635,286 +673,8 @@ const events = () => {
           </Animated.View>
         </View>
       </Modal>
-
-      {/* Tooltip */}
-      {tooltipVisible && tooltipEvent && (
-        <Animated.View
-          style={[
-            styles.tooltip,
-            {
-              left: tooltipPosition.x - 150,
-              top: tooltipPosition.y,
-              opacity: tooltipFadeAnim,
-            },
-          ]}
-        >
-          <Text style={styles.tooltipTitle}>{tooltipEvent.title}</Text>
-          <Text style={styles.tooltipDate}>
-            {format(new Date(tooltipEvent.date), "MMM dd")}
-            {tooltipEvent.time ? ` at ${tooltipEvent.time}` : ""}
-          </Text>
-          {tooltipEvent.description && (
-            <Text style={styles.tooltipDescription} numberOfLines={2}>
-              {tooltipEvent.description}
-            </Text>
-          )}
-        </Animated.View>
-      )}
-    </View>
+    </SafeAreaView>
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#1E0A3C",
-  },
-  header: {
-    fontSize: 28,
-    fontWeight: "bold",
-    textAlign: "center",
-    marginVertical: 16,
-    color: "#E0C3FC",
-  },
-  calendarContainer: {
-    backgroundColor: "#2C003E",
-    borderRadius: 10,
-    overflow: "hidden",
-    marginHorizontal: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    elevation: 5,
-  },
-  eventsContainer: {
-    marginTop: 16,
-    marginHorizontal: 16,
-    flex: 1,
-  },
-  eventsHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 8,
-  },
-  eventsHeaderText: {
-    fontSize: 20,
-    fontWeight: "600",
-    color: "#E0C3FC",
-  },
-  addButton: {
-    backgroundColor: "#6F42C1",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-  },
-  addButtonText: {
-    color: "#fff",
-    fontWeight: "600",
-  },
-  eventsList: {
-    flex: 1,
-  },
-  eventItem: {
-    backgroundColor: "#291A3F",
-    borderRadius: 8,
-    marginBottom: 10,
-    padding: 12,
-    borderLeftWidth: 4,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.3,
-    shadowRadius: 2,
-    elevation: 3,
-  },
-  eventItemContent: {
-    flex: 1,
-  },
-  eventItemHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 4,
-  },
-  eventTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#E0C3FC",
-    flex: 1,
-  },
-  colorDot: { width: 12, height: 12, borderRadius: 6 },
-  eventTime: { fontSize: 16, color: "#B799FF", marginBottom: 4 },
-  eventDescription: { fontSize: 16, color: "#B799FF" },
-  noEventsContainer: {
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 20,
-  },
-  noEventsText: {
-    fontSize: 18,
-    fontWeight: "500",
-    color: "#B799FF",
-  },
-  noEventsSubtext: {
-    fontSize: 16,
-    color: "#B799FF",
-    marginTop: 4,
-  },
-  modalBackground: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.7)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  modalContainer: {
-    width: "85%",
-    backgroundColor: "#2C003E",
-    borderRadius: 15,
-    overflow: "hidden",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 5 },
-    shadowOpacity: 0.4,
-    shadowRadius: 10,
-    elevation: 10,
-  },
-  modalHeader: {
-    backgroundColor: "#3B0A45",
-    padding: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: "#6F42C1",
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  modalHeaderText: {
-    fontSize: 20,
-    fontWeight: "bold",
-    color: "#E0C3FC",
-  },
-  closeButton: { padding: 5 },
-  closeButtonText: {
-    fontSize: 24,
-    color: "#aaa",
-    fontWeight: "bold",
-  },
-  modalContent: { padding: 15 },
-  formGroup: { marginBottom: 15 },
-  label: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#E0C3FC",
-    marginBottom: 5,
-  },
-  input: {
-    backgroundColor: "#3B0A45",
-    borderRadius: 8,
-    padding: 10,
-    borderWidth: 1,
-    borderColor: "#6F42C1",
-    fontSize: 16,
-    color: "#E0C3FC",
-  },
-  textArea: { height: 100 },
-  dateText: {
-    fontSize: 16,
-    color: "#E0C3FC",
-    paddingVertical: 10,
-    backgroundColor: "#3B0A45",
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    borderWidth: 1,
-    borderColor: "#6F42C1",
-  },
-  colorOptions: { flexDirection: "row", flexWrap: "wrap", marginTop: 5 },
-  colorOption: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    marginRight: 10,
-    marginBottom: 10,
-  },
-  selectedColorOption: {
-    borderWidth: 2,
-    borderColor: "#E0C3FC",
-    transform: [{ scale: 1.2 }],
-  },
-  submitButton: {
-    backgroundColor: "#6F42C1",
-    paddingVertical: 12,
-    borderRadius: 8,
-    alignItems: "center",
-    marginTop: 10,
-  },
-  submitButtonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  eventDetailRow: {
-    flexDirection: "row",
-    marginBottom: 10,
-    paddingBottom: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: "#6F42C1",
-  },
-  eventDetailLabel: {
-    width: 100,
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#E0C3FC",
-  },
-  eventDetailValue: { flex: 1, fontSize: 16, color: "#B799FF" },
-  modalActions: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
-    marginTop: 15,
-  },
-  closeViewButton: {
-    backgroundColor: "#6c757d",
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 6,
-    marginRight: 10,
-  },
-  closeViewButtonText: { color: "#fff", fontWeight: "600", fontSize: 16 },
-  deleteButton: {
-    backgroundColor: "#dc3545",
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 6,
-  },
-  deleteButtonText: { color: "#fff", fontWeight: "600", fontSize: 16 },
-  editButton: {
-    backgroundColor: "#ffc107",
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 6,
-    marginLeft: 10,
-  },
-  editButtonText: { color: "#fff", fontWeight: "600", fontSize: 16 },
-  tooltip: {
-    position: "absolute",
-    width: 300,
-    backgroundColor: "rgba(44, 0, 62, 0.95)",
-    borderRadius: 8,
-    padding: 12,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 5 },
-    shadowOpacity: 0.3,
-    shadowRadius: 5,
-    elevation: 10,
-    borderLeftWidth: 4,
-    borderLeftColor: "#6F42C1",
-  },
-  tooltipTitle: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: "#E0C3FC",
-    marginBottom: 4,
-  },
-  tooltipDate: { fontSize: 14, color: "#B799FF", marginBottom: 4 },
-  tooltipDescription: { fontSize: 14, color: "#B799FF" },
-});
-
-export default events;
+export default Events;

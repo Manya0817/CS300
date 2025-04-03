@@ -87,6 +87,18 @@ export default function StudentLayout() {
             }
           }}
         />
+         <Stack.Screen
+          name="events"
+          options={{
+            headerTitle: "Events",
+            headerShown: false,
+            headerStyle: { backgroundColor: "#F59E0B" },
+            headerTintColor: "#fff",
+            headerTitleStyle: {
+              fontWeight: "700",
+            }
+          }}
+        />
         
 <Stack.Screen
   name="notifications"
