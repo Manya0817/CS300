@@ -7,19 +7,19 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
-  StyleSheet,
   Dimensions,
   StatusBar,
+  SafeAreaView,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { createUserWithEmailAndPassword } from "firebase/auth";
 import { auth, db } from "../firebase";
 import { setDoc, doc } from "firebase/firestore";
 import { Ionicons } from "@expo/vector-icons";
-
-const { width } = Dimensions.get("window");
+import { registerStyles } from "../styles/registerStyles";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export default function RegisterScreen() {
   const router = useRouter();
@@ -34,12 +34,19 @@ export default function RegisterScreen() {
   const [passwordError, setPasswordError] = useState("");
   const [confirmPasswordError, setConfirmPasswordError] = useState("");
   const [loading, setLoading] = useState(false);
-
-  // Validate email format
-  const validateEmail = (email: string): boolean => {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return emailRegex.test(email);
-  };
+  const [screenWidth, setScreenWidth] = useState(Dimensions.get('window').width);
+  
+  // Generate styles based on screen width
+  const styles = registerStyles(screenWidth);
+  
+  // Handle screen rotation and resize
+  useEffect(() => {
+    const subscription = Dimensions.addEventListener('change', ({ window }) => {
+      setScreenWidth(window.width);
+    });
+    
+    return () => subscription?.remove();
+  }, []);
 
   // Password strength requirements
   const passwordRequirements = [
@@ -49,18 +56,24 @@ export default function RegisterScreen() {
     { id: 4, text: "At least one special character", met: /[!@#$%^&*(),.?":{}|<>]/.test(password) },
   ];
 
+  // Validate email format
+  const validateEmail = (email: string): boolean => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
+
   const handleRegister = async () => {
     setNameError("");
     setEmailError("");
     setPasswordError("");
     setConfirmPasswordError("");
     let isValid = true;
-
+  
     if (!name.trim()) {
       setNameError("Name is required");
       isValid = false;
     }
-
+  
     if (!email) {
       setEmailError("Email is required");
       isValid = false;
@@ -71,7 +84,7 @@ export default function RegisterScreen() {
       setEmailError("Use your IIIT Guwahati student email (e.g., firstname.lastname##b@iiitg.ac.in)");
       isValid = false;
     }
-
+  
     if (!password) {
       setPasswordError("Password is required");
       isValid = false;
@@ -88,7 +101,7 @@ export default function RegisterScreen() {
       setPasswordError("Password must contain at least one special character");
       isValid = false;
     }
-
+  
     if (!confirmPassword) {
       setConfirmPasswordError("Please confirm your password");
       isValid = false;
@@ -96,7 +109,7 @@ export default function RegisterScreen() {
       setConfirmPasswordError("Passwords do not match");
       isValid = false;
     }
-
+  
     if (isValid) {
       setLoading(true);
       try {
@@ -104,14 +117,32 @@ export default function RegisterScreen() {
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
         const user = userCredential.user;
         
-        // Store additional user information in Firestore
-        await setDoc(doc(db, "users", user.uid), {
+        // Extract academic year from email (e.g., "23b" from firstname.lastname23b@iiitg.ac.in)
+        const emailNamePart = email.split('@')[0];
+        const academicYearMatch = emailNamePart.match(/(\d+)b$/);
+        const academicYear = academicYearMatch ? `20${academicYearMatch[1]}` : null;
+        
+        // Create user metadata object
+        const userData = {
+          uid: user.uid, // Store Firebase UID in the document
           name: name,
           email: email,
           role: "student",
-          createdAt: new Date()
-        });
+          batch: academicYear, // Include batch year if found in email
+          createdAt: new Date(),
+          lastLogin: new Date(),
+          phoneVerified: false
+        };
         
+        // Store user information in Firestore
+        await setDoc(doc(db, "users", user.uid), userData);
+        
+        // Store user metadata in AsyncStorage
+        await AsyncStorage.setItem("userId", user.uid);
+        await AsyncStorage.setItem("userRole", "student");
+        await AsyncStorage.setItem("userMetadata", JSON.stringify(userData));
+        
+        // Navigate to dashboard
         router.replace("./student/dashboard");
       } catch (err: any) {
         if (err.code === "auth/email-already-in-use") {
@@ -129,10 +160,10 @@ export default function RegisterScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" />
       <LinearGradient
-        colors={["#006064", "#00838F", "#0097A7"]}
+        colors={["#231942", "#5E548E", "#9F86C0"]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.gradient}
@@ -153,13 +184,13 @@ export default function RegisterScreen() {
             onPress={() => router.push("/")}
             disabled={loading}
           >
-            <Ionicons name="arrow-back" size={24} color="white" />
+            <Ionicons name="arrow-back" size={24} color="#E0C3FC" />
           </TouchableOpacity>
 
           {/* Header with Logo */}
           <View style={styles.headerContainer}>
-            <View style={styles.logoCircle}>
-              <Text style={styles.logoText}>EE</Text>
+            <View style={styles.iconContainer}>
+              <Ionicons name="calendar" size={screenWidth < 350 ? 40 : 50} color="white" />
             </View>
             <Text style={styles.headerText}>Create Account</Text>
             <Text style={styles.subtitle}>Join the IIITG community</Text>
@@ -171,11 +202,11 @@ export default function RegisterScreen() {
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Full Name</Text>
               <View style={[styles.inputContainer, nameError ? styles.inputError : null]}>
-                <Ionicons name="person" size={20} color="#00838F" style={styles.inputIcon} />
+                <Ionicons name="person-outline" size={20} color="#B799FF" style={styles.inputIcon} />
                 <TextInput
                   style={styles.input}
                   placeholder="Enter your full name"
-                  placeholderTextColor="#80DEEA"
+                  placeholderTextColor="#B799FF80"
                   value={name}
                   onChangeText={(text) => {
                     setName(text);
@@ -186,7 +217,7 @@ export default function RegisterScreen() {
               </View>
               {nameError ? (
                 <View style={styles.errorContainer}>
-                  <Ionicons name="alert-circle" size={16} color="#FF5252" />
+                  <Ionicons name="alert-circle" size={16} color="#E83A95" />
                   <Text style={styles.errorText}>{nameError}</Text>
                 </View>
               ) : null}
@@ -196,11 +227,11 @@ export default function RegisterScreen() {
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Email Address</Text>
               <View style={[styles.inputContainer, emailError ? styles.inputError : null]}>
-                <Ionicons name="mail" size={20} color="#00838F" style={styles.inputIcon} />
+                <Ionicons name="mail-outline" size={20} color="#B799FF" style={styles.inputIcon} />
                 <TextInput
                   style={styles.input}
                   placeholder="firstname.lastname##b@iiitg.ac.in"
-                  placeholderTextColor="#80DEEA"
+                  placeholderTextColor="#B799FF80"
                   value={email}
                   onChangeText={(text) => {
                     setEmail(text);
@@ -213,12 +244,12 @@ export default function RegisterScreen() {
               </View>
               {emailError ? (
                 <View style={styles.errorContainer}>
-                  <Ionicons name="alert-circle" size={16} color="#FF5252" />
+                  <Ionicons name="alert-circle" size={16} color="#E83A95" />
                   <Text style={styles.errorText}>{emailError}</Text>
                 </View>
               ) : (
                 <View style={styles.helperContainer}>
-                  <Ionicons name="information-circle" size={14} color="#B2EBF2" />
+                  <Ionicons name="information-circle" size={14} color="#B799FF" />
                   <Text style={styles.helperText}>Use your IIIT Guwahati email</Text>
                 </View>
               )}
@@ -228,11 +259,11 @@ export default function RegisterScreen() {
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Password</Text>
               <View style={[styles.inputContainer, passwordError ? styles.inputError : null]}>
-                <Ionicons name="lock-closed" size={20} color="#00838F" style={styles.inputIcon} />
+                <Ionicons name="lock-closed-outline" size={20} color="#B799FF" style={styles.inputIcon} />
                 <TextInput
                   style={styles.input}
                   placeholder="Create a strong password"
-                  placeholderTextColor="#80DEEA"
+                  placeholderTextColor="#B799FF80"
                   value={password}
                   onChangeText={(text) => {
                     setPassword(text);
@@ -247,15 +278,15 @@ export default function RegisterScreen() {
                   disabled={loading}
                 >
                   <Ionicons 
-                    name={showPassword ? "eye-off" : "eye"} 
-                    size={22} 
-                    color="#80DEEA" 
+                    name={showPassword ? "eye-off-outline" : "eye-outline"} 
+                    size={20} 
+                    color="#B799FF" 
                   />
                 </TouchableOpacity>
               </View>
               {passwordError ? (
                 <View style={styles.errorContainer}>
-                  <Ionicons name="alert-circle" size={16} color="#FF5252" />
+                  <Ionicons name="alert-circle" size={16} color="#E83A95" />
                   <Text style={styles.errorText}>{passwordError}</Text>
                 </View>
               ) : (
@@ -265,7 +296,7 @@ export default function RegisterScreen() {
                       <Ionicons 
                         name={req.met ? "checkmark-circle" : "ellipse-outline"} 
                         size={14} 
-                        color={req.met ? "#4CAF50" : "#B2EBF2"} 
+                        color={req.met ? "#9F86C0" : "#B799FF"} 
                         style={styles.requirementIcon}
                       />
                       <Text style={[styles.requirementText, req.met ? styles.requirementMet : null]}>
@@ -281,11 +312,11 @@ export default function RegisterScreen() {
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Confirm Password</Text>
               <View style={[styles.inputContainer, confirmPasswordError ? styles.inputError : null]}>
-                <Ionicons name="shield-checkmark" size={20} color="#00838F" style={styles.inputIcon} />
+                <Ionicons name="shield-checkmark-outline" size={20} color="#B799FF" style={styles.inputIcon} />
                 <TextInput
                   style={styles.input}
                   placeholder="Confirm your password"
-                  placeholderTextColor="#80DEEA"
+                  placeholderTextColor="#B799FF80"
                   value={confirmPassword}
                   onChangeText={(text) => {
                     setConfirmPassword(text);
@@ -300,15 +331,15 @@ export default function RegisterScreen() {
                   disabled={loading}
                 >
                   <Ionicons 
-                    name={showConfirmPassword ? "eye-off" : "eye"} 
-                    size={22} 
-                    color="#80DEEA" 
+                    name={showConfirmPassword ? "eye-off-outline" : "eye-outline"} 
+                    size={20} 
+                    color="#B799FF" 
                   />
                 </TouchableOpacity>
               </View>
               {confirmPasswordError ? (
                 <View style={styles.errorContainer}>
-                  <Ionicons name="alert-circle" size={16} color="#FF5252" />
+                  <Ionicons name="alert-circle" size={16} color="#E83A95" />
                   <Text style={styles.errorText}>{confirmPasswordError}</Text>
                 </View>
               ) : null}
@@ -319,13 +350,14 @@ export default function RegisterScreen() {
               style={[styles.registerButton, loading ? styles.buttonDisabled : null]}
               onPress={handleRegister}
               disabled={loading}
+              activeOpacity={0.8}
             >
               {loading ? (
                 <ActivityIndicator color="#fff" />
               ) : (
                 <View style={styles.buttonContent}>
                   <Text style={styles.buttonText}>Create Account</Text>
-                  <Ionicons name="arrow-forward" size={20} color="white" style={styles.buttonIcon} />
+                  <Ionicons name="arrow-forward-outline" size={20} color="white" style={styles.buttonIcon} />
                 </View>
               )}
             </TouchableOpacity>
@@ -340,207 +372,6 @@ export default function RegisterScreen() {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
-    </View>
+    </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  gradient: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    top: 0,
-    bottom: 0,
-  },
-  keyboardAvoidingView: {
-    flex: 1,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: 24,
-    paddingTop: 40,
-    paddingBottom: 60,
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "rgba(255, 255, 255, 0.2)",
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 24,
-  },
-  headerContainer: {
-    alignItems: "center",
-    marginBottom: 30,
-  },
-  logoCircle: {
-    width: 70,
-    height: 70,
-    borderRadius: 35,
-    backgroundColor: "rgba(255, 255, 255, 0.2)",
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 16,
-    borderWidth: 2,
-    borderColor: "rgba(255, 255, 255, 0.3)",
-  },
-  logoText: {
-    fontSize: 28,
-    fontWeight: "bold",
-    color: "#FFF",
-  },
-  headerText: {
-    fontSize: 32,
-    fontWeight: "bold",
-    color: "#FFF",
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: "rgba(255, 255, 255, 0.8)",
-    marginTop: 4,
-  },
-  formContainer: {
-    backgroundColor: "rgba(255, 255, 255, 0.15)",
-    backdropFilter: "blur(10px)",
-    padding: 24,
-    borderRadius: 20,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.2,
-    shadowRadius: 24,
-    elevation: 10,
-  },
-  inputGroup: {
-    marginBottom: 20,
-  },
-  inputLabel: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#FFF",
-    marginBottom: 10,
-    paddingLeft: 4,
-  },
-  inputContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "rgba(255, 255, 255, 0.9)",
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    height: 56,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  inputIcon: {
-    marginRight: 12,
-  },
-  input: {
-    flex: 1,
-    height: 56,
-    color: "#006064",
-    fontSize: 16,
-    fontWeight: "500",
-  },
-  toggleButton: {
-    padding: 8,
-  },
-  inputError: {
-    borderWidth: 1,
-    borderColor: "#FF5252",
-  },
-  errorContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: 8,
-    paddingLeft: 4,
-  },
-  errorText: {
-    fontSize: 12,
-    color: "#FF5252",
-    marginLeft: 6,
-    fontWeight: "500",
-  },
-  helperContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: 6,
-    paddingLeft: 4,
-  },
-  helperText: {
-    fontSize: 12,
-    color: "#B2EBF2",
-    marginLeft: 6,
-  },
-  requirementsContainer: {
-    marginTop: 12,
-    paddingLeft: 4,
-  },
-  requirementItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 6,
-  },
-  requirementIcon: {
-    marginRight: 6,
-  },
-  requirementText: {
-    fontSize: 12,
-    color: "#B2EBF2",
-    fontWeight: "500",
-  },
-  requirementMet: {
-    color: "#4CAF50",
-  },
-  registerButton: {
-    backgroundColor: "#00838F",
-    borderRadius: 12,
-    paddingVertical: 16,
-    alignItems: "center",
-    marginTop: 10,
-    marginBottom: 24,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  buttonContent: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  buttonDisabled: {
-    opacity: 0.7,
-  },
-  buttonText: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#fff",
-  },
-  buttonIcon: {
-    marginLeft: 8,
-  },
-  footerContainer: {
-    flexDirection: "row",
-    justifyContent: "center",
-    marginTop: 8,
-  },
-  footerText: {
-    fontSize: 14,
-    color: "rgba(255, 255, 255, 0.7)",
-  },
-  footerLink: {
-    fontSize: 14,
-    color: "#FFF",
-    fontWeight: "600",
-  },
-});

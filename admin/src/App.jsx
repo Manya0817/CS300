@@ -8,6 +8,7 @@ import UploadTimetable from './pages/uploadTimetable';
 import UploadExam from './pages/UploadExam';
 import ManageTimetables from './pages/ManageTimetables';
 import ManageExams from './pages/ManageExams';
+import EventsView from './pages/events';
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -64,6 +65,10 @@ function App() {
         <Route 
           path="/manage-exams" 
           element={isAuthenticated ? <ManageExams /> : <Navigate to="/" />} 
+        />
+        <Route 
+          path="/view-events" 
+          element={isAuthenticated ? <EventsView /> : <Navigate to="/" />} 
         />
       </Routes>
     </Router>

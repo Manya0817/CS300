@@ -99,6 +99,15 @@ function Dashboard({ onLogout }) {
       path: '/manage-exams',
       buttonText: 'Manage',
       color: '#673AB7',
+    },
+    {
+      id: 7,
+      title: 'View Events Schedule',
+      description: 'View events schedules',
+      icon: <MdManageAccounts size={28} />,
+      path: '/view-events',
+      buttonText: 'View',
+      color: '#E91E63',
     }
   ];
 
